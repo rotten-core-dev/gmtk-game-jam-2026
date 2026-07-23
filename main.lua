@@ -1,4 +1,4 @@
-local Gamestate = require "lib.hump.gamestate"
+local state = require "src.state"
 local moonshine = require "lib.moonshine"
 local push = require "lib.push"
 
@@ -79,27 +79,32 @@ function love.load()
     effect.crt.scaleFactor = {1,1}--{0.95,0.95}
     effect.crt.feather = 0.01 --0.02
     
-    -- Direct HUMP to automatically hook into love.update, love.draw, etc.
-    Gamestate.registerEvents()
-    
+  
     -- Start the sequence!
-    Gamestate.switch(MenuState)
+    state.switch(MenuState)
 end
 
 function love.update(dt)
-    
     CurrentTime = love.timer.getTime()
+
+    local current = state.current()
+    if current and current.update then
+        current:update(dt)
+    end
 end
 
 -- Override love.draw so Moonshine wraps around whatever HUMP is currently drawing
 function love.draw()
-    effect(function()
+
         push:start()
-        
-            Gamestate.current():draw()
-       
+            effect(function()
+                local current = state.current()
+                if current and current.draw then
+                    current:draw()
+                end
+            end)
         push:finish()
-    end)
+    
 
 end
 

@@ -1,6 +1,6 @@
-local Gamestate = require "lib.hump.gamestate"
 local Timer = require "lib.hump.timer"
 local SplashState = require "src.states.splash"
+local state = require "src.state"
 
 local intro = {}
 

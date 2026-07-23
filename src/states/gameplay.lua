@@ -1,7 +1,7 @@
-local Gamestate = require "lib.hump.gamestate"
 local push = require "lib.push"
 local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
+local state = require "src.state"
 
 local gameplay = {}
 local PLAYER_POLARITY = "primary"
@@ -635,7 +635,7 @@ function gameplay:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
 	if escapeDown and not self.escapeWasDown then
 		local MenuState = require "src.states.menu"
-		Gamestate.switch(MenuState)
+		state.switch(MenuState)
 		return
 	end
 	self.escapeWasDown = escapeDown
