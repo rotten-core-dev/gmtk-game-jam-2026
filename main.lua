@@ -6,6 +6,7 @@ local push = require "lib.push"
 
 -- Load your sequential states
 local IntroState = require "src.states.intro"
+local MenuState = require "src.states.menu"
 
 -- Virtual resolution (design resolution)
 local VIRTUAL_WIDTH = 640
@@ -58,7 +59,7 @@ function love.load()
     Gamestate.registerEvents()
     
     -- Start the sequence!
-    Gamestate.switch(IntroState)
+    Gamestate.switch(MenuState)
 end
 
 function love.update(dt)
