@@ -19,7 +19,7 @@ function love.load()
     
 
     debug = {
-        invn = false,
+        invn = true,
     }
     love.window.setFullscreen( true )
     love.window.setTitle("COUNTEROIDS")
@@ -28,17 +28,18 @@ function love.load()
     WINDOW_WIDTH = love.graphics.getWidth()
 
     --fonts--
-    font = love.graphics.newFont("lib/fonts/Lightshadow.otf", 13)
+    font = love.graphics.newFont("lib/fonts/GameBoy.ttf", 13)
     smallfont = love.graphics.newFont("lib/fonts/CooperHewitt-OTF-public/CooperHewitt-Bold.otf", 13)
-    largefont = love.graphics.newFont("lib/fonts/Lightshadow.otf", 20)
-    menulargefont = love.graphics.newFont("lib/fonts/Lightshadow.otf", 25)
+    largefont = love.graphics.newFont("lib/fonts/GameBoy.ttf", 20)
+    menulargefont = love.graphics.newFont("lib/fonts/GameBoy.ttf", 25)
     titlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 115)
     biggertitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 135)
     menutitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 115)
     biggermenutitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 120)
+    WaveCompleteFont = love.graphics.newFont("lib/fonts/GameBoy.ttf",60)
     gameoverfont = love.graphics.newFont("lib/fonts/pixel.ttf", 80)
     biggergameoverfont = love.graphics.newFont("lib/fonts/pixel.ttf", 85)
-    scorefont = love.graphics.newFont("lib/fonts/Lightshadow.otf", 13)
+    scorefont = love.graphics.newFont("lib/fonts/GameBoy.ttf", 20)
     settingsfont = love.graphics.newFont("lib/fonts/pixel.ttf", 20)
 
     love.graphics.setFont(font)

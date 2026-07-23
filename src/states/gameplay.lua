@@ -5,6 +5,11 @@ local state = require "src.state"
 local gameplay = {}
 local PLAYER_POLARITY = "primary"
 local SHIP_INVINCIBLE_DURATION = 2.5
+local SCORE_COUNT_SPEED = 220
+local SCORE_COUNT_SPEED_EXTRA = 6
+local SURVIVOR_POP_INTERVAL_BASE = 0.55
+local SURVIVOR_POP_INTERVAL_PER_MULT = 0.12
+local SURVIVOR_POP_INTERVAL_MAX = 1.35
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -256,14 +261,16 @@ function gameplay:resetRun()
 		vx = 0,
 		vy = 0,
 		angle = 0,
-		radius = 12,
+		radius = 20,
 	}
 
 	self.bullets = {}
 	self.asteroids = {}
 	self.score = 0
+	self.displayedScore = 0
 	self.lives = 3
 	self.wave = 1
+	self.clearedWave = 0
 	self.isGameOver = false
 	self.mouseWasDown = false
 	self.restartWasDown = false
@@ -277,9 +284,115 @@ function gameplay:resetRun()
 	self.popTimer = 0
 	self.popInterval = 0.5
 	self.shipHitEffects = {}
+	self.waveClearMessage = ""
+	self.waveClearChars = 0
+	self.waveClearTypeTimer = 0
+	self.waveClearScoreDelay = 0
+	self.waveClearPromptDelay = 0
+	self.waveClearCanContinue = false
+	self.scoreCountSoundPlaying = false
+	sounds.get_points:setLooping(true)
+	sounds.get_points:stop()
 	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
+end
+
+function gameplay:addScore(points)
+	self.score = self.score + points
+end
+
+function gameplay:getWaveScoreMultiplier()
+	return math.max(1, self.wave or 1)
+end
+
+function gameplay:getSurvivorBonusMultiplier()
+	return self:getWaveScoreMultiplier() * 2
+end
+
+function gameplay:addWaveScaledScore(basePoints)
+	local multiplier = self:getWaveScoreMultiplier()
+	self:addScore(basePoints * multiplier)
+end
+
+function gameplay:addSurvivorAsteroidScore(basePoints)
+	local multiplier = self:getSurvivorBonusMultiplier()
+	self:addScore(basePoints * multiplier)
+end
+
+function gameplay:updateDisplayedScore(dt)
+	local wasCounting = (self.displayedScore or 0) < self.score
+
+	if self.displayedScore >= self.score then
+		self.displayedScore = self.score
+	else
+		local remaining = self.score - self.displayedScore
+		local gain = SCORE_COUNT_SPEED + remaining * SCORE_COUNT_SPEED_EXTRA
+		local step = math.max(1, math.floor(gain * dt))
+		self.displayedScore = math.min(self.score, self.displayedScore + step)
+	end
+
+	local isCounting = (self.displayedScore or 0) < self.score
+	if isCounting and not self.scoreCountSoundPlaying then
+		sounds.get_points:stop()
+		sounds.get_points:play()
+		self.scoreCountSoundPlaying = true
+	elseif not isCounting and self.scoreCountSoundPlaying then
+		sounds.get_points:stop()
+		self.scoreCountSoundPlaying = false
+	end
+
+	if not wasCounting and not isCounting then
+		self.displayedScore = self.score
+	end
+end
+
+function gameplay:beginWaveClearSequence()
+	if self.waitingForNextWaveStart then
+		return
+	end
+
+	self.isPoppingWave = false
+	self.waitingForNextWaveStart = true
+	self.continueWasDown = false
+	self.clearedWave = self.wave
+	self.waveClearMessage = "WAVE " .. tostring(self.clearedWave) .. " COMPLETE"
+	self.waveClearChars = 0
+	self.waveClearTypeTimer = 0
+	self.waveClearScoreDelay = 1.0
+	self.waveClearPromptDelay = 1.0
+	self.waveClearCanContinue = false
+	self.bullets = {}
+	self.ship.vx = 0
+	self.ship.vy = 0
+end
+
+function gameplay:updateWaveClearSequence(dt)
+	if self.waveClearChars < #self.waveClearMessage then
+		self.waveClearTypeTimer = self.waveClearTypeTimer + dt
+		local typeInterval = 0.045
+		while self.waveClearTypeTimer >= typeInterval and self.waveClearChars < #self.waveClearMessage do
+			self.waveClearTypeTimer = self.waveClearTypeTimer - typeInterval
+			self.waveClearChars = self.waveClearChars + 1
+		end
+		return
+	end
+
+	if self.waveClearScoreDelay > 0 then
+		self.waveClearScoreDelay = math.max(0, self.waveClearScoreDelay - dt)
+		return
+	end
+
+	if self.waveClearPromptDelay > 0 then
+		self.waveClearPromptDelay = math.max(0, self.waveClearPromptDelay - dt)
+		return
+	end
+
+	if (self.displayedScore or 0) < self.score then
+		return
+	end
+
+	self.waveClearCanContinue = true
 end
 
 function gameplay:isShipInvincible()
@@ -385,13 +498,13 @@ function gameplay:splitAsteroid(asteroid)
 	if asteroid.size == "large" then
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
-		self.score = self.score + 20
+		self:addWaveScaledScore(20)
 	elseif asteroid.size == "medium" then
 		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
 		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
-		self.score = self.score + 40
+		self:addWaveScaledScore(40)
 	else
-		self.score = self.score + 60
+		self:addWaveScaledScore(60)
 	end
 end
 
@@ -695,8 +808,10 @@ function gameplay:handleShipAsteroidCollision()
 end
 
 function gameplay:startPopSequence()
+	local survivorMultiplier = self:getSurvivorBonusMultiplier()
 	self.isPoppingWave = true
 	self.popTimer = 0
+	self.popInterval = math.min(SURVIVOR_POP_INTERVAL_MAX, SURVIVOR_POP_INTERVAL_BASE + survivorMultiplier * SURVIVOR_POP_INTERVAL_PER_MULT)
 	self.shipWallAccelLockTimer = math.max(self.shipWallAccelLockTimer, 0.25)
 end
 
@@ -718,14 +833,12 @@ function gameplay:updatePopSequence(dt)
 	self.popTimer = self.popInterval
 	if #self.asteroids > 0 then
 		local popped = table.remove(self.asteroids)
-		self.score = self.score + self:getPopScoreForAsteroid(popped)
+		self:addSurvivorAsteroidScore(self:getPopScoreForAsteroid(popped))
 		sounds.hit_foe:play()
 	end
 
 	if #self.asteroids == 0 then
-		self.isPoppingWave = false
-		self.waitingForNextWaveStart = true
-		self.continueWasDown = false
+		self:beginWaveClearSequence()
 	end
 end
 
@@ -739,12 +852,15 @@ end
 function gameplay:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
 	if escapeDown and not self.escapeWasDown then
+		sounds.get_points:stop()
+		self.scoreCountSoundPlaying = false
 		local MenuState = require "src.states.menu"
 		state.switch(MenuState)
 		return
 	end
 	self.escapeWasDown = escapeDown
 	self.shipInvincibleTimer = math.max(0, (self.shipInvincibleTimer or 0) - dt)
+	self:updateDisplayedScore(dt)
 	self:updateShipHitEffects(dt)
 
 	if self.isGameOver then
@@ -757,8 +873,9 @@ function gameplay:update(dt)
 	end
 
 	if self.waitingForNextWaveStart then
-		local continueDown = love.keyboard.isDown("return") or love.keyboard.isDown("space")
-		if continueDown and not self.continueWasDown then
+		self:updateWaveClearSequence(dt)
+		local continueDown = love.keyboard.isDown("space")
+		if self.waveClearCanContinue and continueDown and not self.continueWasDown then
 			self:startNextWave()
 		end
 		self.continueWasDown = continueDown
@@ -798,9 +915,8 @@ function gameplay:update(dt)
 	end
 
 	if #self.asteroids == 0 then
-		self.wave = self.wave + 1
-		self.orbitStartTime = love.timer.getTime()
-		self:spawnWave(math.min(5 + self.wave, 12))
+		self:beginWaveClearSequence()
+		return
 	end
 end
 
@@ -841,7 +957,7 @@ function gameplay:drawShip()
 	local rightY = ship.y + math.sin(ship.angle - 2.5) * r
 
 	love.graphics.setColor(self:getArenaPlayerColor())
-	love.graphics.polygon("line", noseX, noseY, leftX, leftY, rightX, rightY)
+	love.graphics.polygon("fill", noseX, noseY, leftX, leftY, rightX, rightY)
 end
 
 function gameplay:drawBullets()
@@ -858,17 +974,64 @@ function gameplay:drawAsteroids()
 	end
 end
 
+function gameplay:drawScoreWatermark()
+	local centerX, centerY = self:getArena()
+	local label = tostring(self.displayedScore or 0)
+	if gameoverfont then
+		love.graphics.setFont(gameoverfont)
+	elseif scorefont then
+		love.graphics.setFont(scorefont)
+	end
+
+	local color = themes.current.secondary
+	local isCounting = (self.displayedScore or 0) < self.score
+	local scale = isCounting and 1.5 or 1.0
+	local alpha = isCounting and 0.22 or 0.14
+	love.graphics.push()
+	love.graphics.translate(centerX, centerY - 28)
+	love.graphics.scale(scale, scale)
+	love.graphics.setColor(color[1], color[2], color[3], alpha)
+	love.graphics.printf(label, -centerX / scale, 0, (centerX * 2) / scale, "center")
+	love.graphics.pop()
+end
+
 function gameplay:drawHud()
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.print("SCORE: " .. tostring(self.score), 16, 12)
-	love.graphics.print("LIVES: " .. tostring(self.lives), 16, 28)
-	love.graphics.print("WAVE: " .. tostring(self.wave), 16, 44)
+	love.graphics.printf("LIVES: " .. tostring(self.lives), 0, 10,love.graphics.getWidth(),"center")
 	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
+	if self.isPoppingWave then
+		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
+		local survivorMultiplier = self:getSurvivorBonusMultiplier()
+		if gameoverfont then
+			love.graphics.setFont(gameoverfont)
+		end
+		love.graphics.printf(tostring(survivorMultiplier) .. "X", 0, worldH * 0.4, worldW, "center")
+		if scorefont then
+			love.graphics.setFont(scorefont)
+		end
+	end
+
 	if self.waitingForNextWaveStart then
-		love.graphics.printf("WAVE CLEAR - PRESS ENTER OR SPACE FOR NEXT", 0, 220, 640, "center")
+		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
+		local typedText = string.sub(self.waveClearMessage or "", 1, self.waveClearChars or 0)
+		love.graphics.setFont(gameoverfont)
+		love.graphics.printf(typedText, 0, worldH * 0.38, worldW, "center")
+
+		if (self.waveClearChars or 0) >= #(self.waveClearMessage or "") and (self.waveClearScoreDelay or 0) <= 0 then
+			if gameoverfont then
+				love.graphics.setFont(gameoverfont)
+			end
+			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
+			if self.waveClearCanContinue then
+				local nextWaveModifier = math.max(1, (self.wave or 1) + 1)
+				love.graphics.printf(tostring(nextWaveModifier) .. "X NEXT! ", 0, worldH * 0.60, worldW, "center")
+				love.graphics.printf("PRESS SPACE ", 0, worldH * 0.65, worldW, "center")
+				
+			end
+		end
 	end
 end
 
@@ -877,7 +1040,7 @@ function gameplay:drawArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
-	local orbiterRadius = 6
+	local orbiterRadius = 8
 
 	love.graphics.setColor(self:getArenaColor())
 	love.graphics.setLineWidth(4)
@@ -906,6 +1069,7 @@ end
 function gameplay:draw()
 	love.graphics.clear(themes.current.background)
 	self:drawArena()
+	self:drawScoreWatermark()
 	self:drawAsteroids()
 	self:drawBullets()
 	self:drawShipHitEffects()
