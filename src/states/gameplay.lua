@@ -1,6 +1,7 @@
 local Gamestate = require "lib.hump.gamestate"
 local push = require "lib.push"
 local themes = require "src.preferences.themes"
+local sounds = require "src.system.sounds"
 
 local gameplay = {}
 
@@ -110,7 +111,7 @@ function gameplay:getArena()
 end
 
 function gameplay:getOrbitState()
-	local orbitPeriod = 10
+	local orbitPeriod = 3
 	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
 	local completedOrbits = math.floor(elapsed / orbitPeriod)
 	local orbitProgress = (elapsed % orbitPeriod) / orbitPeriod
@@ -345,9 +346,13 @@ function gameplay:updateBullets(dt)
 		local bullet = self.bullets[i]
 		bullet.x = bullet.x + bullet.vx * dt
 		bullet.y = bullet.y + bullet.vy * dt
-		bullet.ttl = bullet.ttl - dt
-		if bullet.ttl <= 0 or isOutsideEllipse(bullet.x, bullet.y, centerX, centerY, arenaRadiusX - bullet.radius, arenaRadiusY - bullet.radius) then
+        -- ttl means how long they last for
+		--bullet.ttl = bullet.ttl - dt
+
+		if bullet.ttl <= 0 then
 			table.remove(self.bullets, i)
+		elseif isOutsideEllipse(bullet.x, bullet.y, centerX, centerY, arenaRadiusX - bullet.radius, arenaRadiusY - bullet.radius) then
+			bounceInsideEllipse(bullet, centerX, centerY, arenaRadiusX, arenaRadiusY, 0.98)
 		end
 	end
 end
@@ -406,10 +411,34 @@ function gameplay:handleBulletAsteroidCollisions()
 		for ai = #self.asteroids, 1, -1 do
 			local asteroid = self.asteroids[ai]
 			local dist = length(bullet.x - asteroid.x, bullet.y - asteroid.y)
-			if dist <= bullet.radius + asteroid.radius and bullet.polarity ~= asteroid.polarity then
-				table.remove(self.bullets, bi)
-				table.remove(self.asteroids, ai)
-				self:splitAsteroid(asteroid)
+			if dist <= bullet.radius + asteroid.radius then
+				if bullet.polarity ~= asteroid.polarity then
+					table.remove(self.bullets, bi)
+					table.remove(self.asteroids, ai)
+					self:splitAsteroid(asteroid)
+					bulletHit = true
+					sounds.hit_foe:play()
+					break
+				end
+
+				local dx = bullet.x - asteroid.x
+				local dy = bullet.y - asteroid.y
+				if dx == 0 and dy == 0 then
+					dx = 1
+				end
+				local normalLen = length(dx, dy)
+				local nx = dx / normalLen
+				local ny = dy / normalLen
+
+				bullet.x = asteroid.x + nx * (asteroid.radius + bullet.radius + 0.5)
+				bullet.y = asteroid.y + ny * (asteroid.radius + bullet.radius + 0.5)
+
+				local impactSpeed = bullet.vx * nx + bullet.vy * ny
+				if impactSpeed < 0 then
+					bullet.vx = (bullet.vx - 2 * impactSpeed * nx) * 0.96
+					bullet.vy = (bullet.vy - 2 * impactSpeed * ny) * 0.96
+				end
+
 				bulletHit = true
 				break
 			end
@@ -423,20 +452,42 @@ function gameplay:handleBulletAsteroidCollisions()
 	end
 end
 
+function gameplay:damagePlayer()
+	sounds.crash:play()
+	self.lives = self.lives - 1
+	local centerX, centerY = self:getArena()
+	self.ship.x = centerX
+	self.ship.y = centerY
+	self.ship.vx = 0
+	self.ship.vy = 0
+	if self.lives <= 0 then
+		self.isGameOver = true
+	end
+end
+
+function gameplay:handleShipBulletCollision()
+	local ship = self.ship
+	local playerPolarity = self:getPlayerPolarity()
+
+	for bi = #self.bullets, 1, -1 do
+		local bullet = self.bullets[bi]
+		if bullet.polarity ~= playerPolarity then
+			local dist = length(ship.x - bullet.x, ship.y - bullet.y)
+			if dist <= ship.radius + bullet.radius then
+				table.remove(self.bullets, bi)
+				self:damagePlayer()
+				return
+			end
+		end
+	end
+end
+
 function gameplay:handleShipAsteroidCollision()
 	local ship = self.ship
 	for _, asteroid in ipairs(self.asteroids) do
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
 		if dist <= ship.radius + asteroid.radius then
-			self.lives = self.lives - 1
-			local centerX, centerY = self:getArena()
-			ship.x = centerX
-			ship.y = centerY
-			ship.vx = 0
-			ship.vy = 0
-			if self.lives <= 0 then
-				self.isGameOver = true
-			end
+			self:damagePlayer()
 			return
 		end
 	end
@@ -465,16 +516,17 @@ function gameplay:update(dt)
 	self:updateShip(dt)
 
 	local mouseDown = love.mouse.isDown(1)
-	if mouseDown and not self.mouseWasDown and self.fireCooldown == 0 then
+	if mouseDown and self.fireCooldown == 0 then
 		self:shoot()
 		self.fireCooldown = 0.13
 	end
-	self.mouseWasDown = mouseDown
+
 
 	self:updateBullets(dt)
 	self:updateAsteroids(dt)
 	self:handleAsteroidAsteroidCollisions()
 	self:handleBulletAsteroidCollisions()
+	self:handleShipBulletCollision()
 	self:handleShipAsteroidCollision()
 
 	if #self.asteroids == 0 then
