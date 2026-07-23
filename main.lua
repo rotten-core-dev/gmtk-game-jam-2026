@@ -28,7 +28,7 @@ function love.load()
     smallfont = love.graphics.newFont("lib/fonts/CooperHewitt-OTF-public/CooperHewitt-Bold.otf", 13)
     largefont = love.graphics.newFont("lib/fonts/Lightshadow.otf", 20)
     menulargefont = love.graphics.newFont("lib/fonts/Lightshadow.otf", 25)
-    titlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 130)
+    titlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 115)
     biggertitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 135)
     menutitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 115)
     biggermenutitlefont = love.graphics.newFont("lib/fonts/pixel.ttf", 120)
@@ -38,6 +38,8 @@ function love.load()
     settingsfont = love.graphics.newFont("lib/fonts/pixel.ttf", 20)
 
     love.graphics.setFont(font)
+
+
     
     -- Set up Push with your virtual resolution vs physical window size
     push:setupScreen(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, {

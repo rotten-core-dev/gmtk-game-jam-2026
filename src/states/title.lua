@@ -28,7 +28,7 @@ function title:draw()
     
     love.graphics.setFont(titlefont)
     love.graphics.setColor(themes.current.primary)
-    love.graphics.print("COUNTDOWN", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTDOWN")/2-120), WINDOW_HEIGHT/2-240)
+    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2-60), WINDOW_HEIGHT/2-240)
     
     love.graphics.setColor(1, 1, 1, 1)
 end
