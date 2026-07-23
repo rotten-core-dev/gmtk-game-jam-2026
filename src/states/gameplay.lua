@@ -165,8 +165,38 @@ function gameplay:spawnAsteroid(x, y, size, polarity)
 	})
 end
 
-function gameplay:spawnWave(count)
+function gameplay:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	for _ = 1, 60 do
+		local angle = love.math.random() * math.pi * 2
+		local distance = math.sqrt(love.math.random())
+		local x = centerX + math.cos(angle) * distance * (arenaRadiusX - 48)
+		local y = centerY + math.sin(angle) * distance * (arenaRadiusY - 48)
+
+		if length(x - shipX, y - shipY) >= minShipDistance then
+			local overlap = false
+			for _, asteroid in ipairs(self.asteroids) do
+				if length(x - asteroid.x, y - asteroid.y) < (asteroid.radius + 30 + 8) then
+					overlap = true
+					break
+				end
+			end
+
+			if not overlap then
+				return x, y
+			end
+		end
+	end
+
+	local fallbackAngle = love.math.random() * math.pi * 2
+	return centerX + math.cos(fallbackAngle) * (arenaRadiusX - 56), centerY + math.sin(fallbackAngle) * (arenaRadiusY - 56)
+end
+
+function gameplay:spawnWave(count)
+	local centerX, centerY = self:getArena()
+	local shipX = (self.ship and self.ship.x) or centerX
+	local shipY = (self.ship and self.ship.y) or centerY
+	local minShipDistance = (self.ship and self.ship.radius or 12) + 30 + 40
 	local asteroidPolarities = {}
 	local primaryCount = math.floor(count / 2)
 	for _ = 1, primaryCount do
@@ -182,10 +212,7 @@ function gameplay:spawnWave(count)
 
 	for _ = 1, count do
 		local polarity = asteroidPolarities[_]
-		local angle = love.math.random() * math.pi * 2
-		local distance = math.sqrt(love.math.random())
-		local x = centerX + math.cos(angle) * distance * (arenaRadiusX - 48)
-		local y = centerY + math.sin(angle) * distance * (arenaRadiusY - 48)
+		local x, y = self:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 		self:spawnAsteroid(x, y, "large", polarity)
 	end
 end
