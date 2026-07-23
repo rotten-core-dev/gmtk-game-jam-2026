@@ -1,7 +1,7 @@
-local Gamestate = require "lib.hump.gamestate"
 local push = require "lib.push"
 local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
+local state = require "src.state"
 
 local gameplay = {}
 local PLAYER_POLARITY = "primary"
@@ -275,7 +275,7 @@ function gameplay:resetRun()
 	self.isPoppingWave = false
 	self.waitingForNextWaveStart = false
 	self.popTimer = 0
-	self.popInterval = 0.32
+	self.popInterval = 0.5
 	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
@@ -578,11 +578,17 @@ end
 
 function gameplay:handleShipAsteroidCollision()
 	local ship = self.ship
+	local playerPolarity = self:getPlayerPolarity()
 	for _, asteroid in ipairs(self.asteroids) do
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
 		if dist <= ship.radius + asteroid.radius then
-			self:damagePlayer()
-			return
+			local asteroidPolarity = self:getAsteroidPolarity(asteroid)
+			if asteroidPolarity == playerPolarity then
+				resolveBodyCollision(ship, asteroid, 1.05)
+			else
+				self:damagePlayer()
+				return
+			end
 		end
 	end
 end
@@ -633,7 +639,7 @@ function gameplay:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
 	if escapeDown and not self.escapeWasDown then
 		local MenuState = require "src.states.menu"
-		Gamestate.switch(MenuState)
+		state.switch(MenuState)
 		return
 	end
 	self.escapeWasDown = escapeDown
@@ -720,7 +726,7 @@ end
 function gameplay:drawAsteroids()
 	for _, asteroid in ipairs(self.asteroids) do
 		love.graphics.setColor(self:getColorForPolarity(self:getAsteroidPolarity(asteroid)))
-		love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius)
+		love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
 	end
 end
 

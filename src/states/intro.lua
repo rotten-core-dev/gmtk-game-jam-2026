@@ -1,13 +1,13 @@
-local Gamestate = require "lib.hump.gamestate"
 local Timer = require "lib.hump.timer"
 local SplashState = require "src.states.splash"
+local state = require "src.state"
 
 local intro = {}
 
 function intro:enter()
     -- Wait 1 second, then switch states
     Timer.after(1.0, function()
-        Gamestate.switch(SplashState)
+        state.switch(SplashState)
     end)
 end
 

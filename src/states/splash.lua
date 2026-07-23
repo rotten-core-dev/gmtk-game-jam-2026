@@ -1,8 +1,8 @@
-local Gamestate = require "lib.hump.gamestate"
 local Timer = require "lib.hump.timer"
 local TitleState = require "src.states.title"
 local shakes = require "src.system.shakes"
 local sounds = require "src.system.sounds"
+local state = require "src.state"
 
 local splash = {}
 
@@ -19,7 +19,7 @@ function splash:enter()
         Timer.after(1.0, function()
             shakes.trigger(2*shakes.current.power,1.0,CurrentTime)
            Timer.after(1.0, function()
-                Gamestate.switch(TitleState)
+                    state.switch(TitleState)
             end)
         end)
     --end)

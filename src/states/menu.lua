@@ -2,8 +2,8 @@ local themes = require "src.preferences.themes"
 local shakes = require "src.system.shakes"
 local push = require "lib.push"
 local sounds = require "src.system.sounds"
-local Gamestate = require "lib.hump.gamestate"
 local GameplayState = require "src.states.gameplay"
+local state = require "src.state"
 
 local menu = {}
 
@@ -130,9 +130,9 @@ function menu:executeChoice()
     if choice == "Exit" then
         love.event.quit()
     elseif choice == "Play" then
-        Gamestate.switch(GameplayState)
+        state.switch(GameplayState)
     elseif choice == "Options" then
-        -- Gamestate.switch(OptionsMenuState)
+        -- state.switch(OptionsMenuState)
     end
 end
 

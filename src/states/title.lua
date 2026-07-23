@@ -1,14 +1,15 @@
-local Gamestate = require "lib.hump.gamestate"
 local Timer = require "lib.hump.timer"
 local MenuState = require "src.states.menu"
 local themes = require "src.preferences.themes"
 local shakes = require "src.system.shakes"
 local sounds = require "src.system.sounds"
+local state = require "src.state"
 
 local title = {}
 
 function title:enter()
     self.showText = true
+    sounds.crash:stop()
     sounds.crash:play()
 end
 
@@ -17,7 +18,7 @@ function title:update(dt)
     CurrentTime = love.timer.getTime()
     shakes.trigger(shakes.current.power,0.5,CurrentTime)
     Timer.after(1.5, function()
-        Gamestate.switch(MenuState)
+        state.switch(MenuState)
     end)
     
 end
