@@ -1,8 +1,6 @@
 local themes = require "src.preferences.themes"
 local shakes = require "src.system.shakes"
-local push = require "lib.push"
 local sounds = require "src.system.sounds"
-local state = require "src.state"
 local GameplayState = require "src.states.gameplay"
 local state = require "src.state"
 
@@ -43,13 +41,9 @@ function menu:update(dt)
     end
 
     local mouseX, mouseY = love.mouse.getPosition()
-    local gameX, gameY = push:toGame(mouseX, mouseY)
-    local hoveredOption = nil
+    local hoveredOption = self:getOptionAtPosition(mouseX, mouseY)
 
-    if gameX and gameY then
-        hoveredOption = self:getOptionAtPosition(gameX, gameY)
-    end
-
+    
     if hoveredOption then
         self.selected = hoveredOption
     end

@@ -1,5 +1,4 @@
 local moonshine = require "lib.moonshine"
-local push = require "lib.push"
 local state = require "src.state"
 
 -- local shakes = require "src.system.shakes"
@@ -48,12 +47,7 @@ function love.load()
 
 
     
-    -- Set up Push with your virtual resolution vs physical window size
-    push:setupScreen(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, {
-        fullscreen = false,
-        resizable = true,
-        pixelperfect = true -- Ensures sharp pixels, no blurry scaling
-    })
+
     
     -- Initialize your shader stack (e.g., CRT and Vignette effect)
     effect = moonshine(moonshine.effects.crt)
@@ -100,21 +94,16 @@ end
 -- Override love.draw so Moonshine wraps around whatever HUMP is currently drawing
 function love.draw()
 
-        push:start()
+   --     push:start()
             effect(function()
                 local current = state.current()
                 if current and current.draw then
                     current:draw()
                 end
            end)
-        push:finish()
+ --       push:finish()
     
 
 
-end
-
--- Crucial: Pass window adjustments directly to the push lib
-function love.resize(w, h)
-    push:resize(w, h)
 end
 

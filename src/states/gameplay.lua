@@ -1,4 +1,3 @@
-local push = require "lib.push"
 local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
@@ -100,13 +99,9 @@ local function resolveBodyCollision(a, b, bounce)
 	end
 end
 
-function gameplay:getWorldSize()
-	return push._WWIDTH or 640, push._WHEIGHT or 480
-end
-
 function gameplay:getArena()
 	local shrinkAmount = 0.98
-	local worldW, worldH = self:getWorldSize()
+	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	return worldW * 0.5, worldH * 0.5, worldH * 0.6 * shrinkScale, worldH * 0.6 * shrinkScale
@@ -401,10 +396,9 @@ function gameplay:updateShip(dt)
 	end
 
 	local mouseX, mouseY = love.mouse.getPosition()
-	local gameX, gameY = push:toGame(mouseX, mouseY)
-	if gameX and gameY then
-		local dx = gameX - ship.x
-		local dy = gameY - ship.y
+	if mouseX and mouseY then
+		local dx = mouseX - ship.x
+		local dy = mouseY - ship.y
 		if dx ~= 0 or dy ~= 0 then
 			ship.angle = angleTo(dx, dy)
 		end
@@ -764,7 +758,7 @@ function gameplay:drawGameOver()
 		return
 	end
 
-	local worldW, worldH = self:getWorldSize()
+	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
 	love.graphics.setColor(themes.current.primary)
 	if gameoverfont then
 		love.graphics.setFont(gameoverfont)
