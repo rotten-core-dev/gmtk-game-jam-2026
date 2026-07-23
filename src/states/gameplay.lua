@@ -104,7 +104,9 @@ end
 
 function gameplay:getArena()
 	local worldW, worldH = self:getWorldSize()
-	return worldW * 0.5, worldH * 0.5, worldW * 0.6, worldH * 0.6
+	local completedOrbits = self:getOrbitState()
+	local shrinkScale = math.max(0.35, 0.9 ^ completedOrbits)
+	return worldW * 0.5, worldH * 0.5, worldW * 0.6 * shrinkScale, worldH * 0.6 * shrinkScale
 end
 
 function gameplay:getOrbitState()
@@ -266,7 +268,7 @@ function gameplay:applyAsteroidPolarityForces(dt)
 				asteroid.vx = asteroid.vx + nx * repelForce * dt
 				asteroid.vy = asteroid.vy + ny * repelForce * dt
 			else
-				local attractForce = 110 / (1 + dist * 0.02)
+				local attractForce = 160 / (1 + dist * 0.03)
 				asteroid.vx = asteroid.vx - nx * attractForce * dt
 				asteroid.vy = asteroid.vy - ny * attractForce * dt
 			end
@@ -477,6 +479,7 @@ function gameplay:update(dt)
 
 	if #self.asteroids == 0 then
 		self.wave = self.wave + 1
+		self.orbitStartTime = love.timer.getTime()
 		self:spawnWave(math.min(5 + self.wave, 12))
 	end
 end
