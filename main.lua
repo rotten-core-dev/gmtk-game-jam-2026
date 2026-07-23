@@ -19,7 +19,7 @@ function love.load()
     
 
     debug = {
-        invn = true,
+        invn = false,
     }
     love.window.setFullscreen( true )
     love.window.setTitle("COUNTEROIDS")

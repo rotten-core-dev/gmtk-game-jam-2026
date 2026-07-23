@@ -4,6 +4,7 @@ local state = require "src.state"
 
 local gameplay = {}
 local PLAYER_POLARITY = "primary"
+local SHIP_INVINCIBLE_DURATION = 2.5
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -270,13 +271,96 @@ function gameplay:resetRun()
 	self.continueWasDown = false
 	self.fireCooldown = 0
 	self.shipWallAccelLockTimer = 0
+	self.shipInvincibleTimer = 0
 	self.isPoppingWave = false
 	self.waitingForNextWaveStart = false
 	self.popTimer = 0
 	self.popInterval = 0.5
+	self.shipHitEffects = {}
 	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
+end
+
+function gameplay:isShipInvincible()
+	return debug.invn or (self.shipInvincibleTimer or 0) > 0
+end
+
+function gameplay:spawnShipHitEffect(x, y)
+	local effect = {
+		x = x,
+		y = y,
+		ttl = 0.42,
+		duration = 0.42,
+		ringRadius = 10,
+		ringGrowth = 220,
+		particles = {},
+	}
+
+	for _ = 1, 18 do
+		local angle = love.math.random() * math.pi * 2
+		local speed = love.math.random(120, 260)
+		table.insert(effect.particles, {
+			x = x,
+			y = y,
+			vx = math.cos(angle) * speed,
+			vy = math.sin(angle) * speed,
+			ttl = 0.18 + love.math.random() * 0.24,
+			radius = love.math.random(1, 3),
+		})
+	end
+
+	table.insert(self.shipHitEffects, effect)
+end
+
+function gameplay:applyAsteroidHitRecoil(originX, originY)
+	local recoilRadius = 600
+	for _, asteroid in ipairs(self.asteroids) do
+		local dx = asteroid.x - originX
+		local dy = asteroid.y - originY
+		local dist = length(dx, dy)
+		local effectiveDist = math.max(0, dist - asteroid.radius)
+		if effectiveDist <= recoilRadius then
+			local nx, ny
+			if dist <= 0.001 then
+				local angle = love.math.random() * math.pi * 2
+				nx = math.cos(angle)
+				ny = math.sin(angle)
+			else
+				nx = dx / dist
+				ny = dy / dist
+			end
+
+			local falloff = 1 - (effectiveDist / recoilRadius)
+			local impulse = 500 * falloff + 40
+			asteroid.vx = asteroid.vx + nx * impulse
+			asteroid.vy = asteroid.vy + ny * impulse
+		end
+	end
+end
+
+function gameplay:updateShipHitEffects(dt)
+	for i = #self.shipHitEffects, 1, -1 do
+		local effect = self.shipHitEffects[i]
+		effect.ttl = effect.ttl - dt
+		effect.ringRadius = effect.ringRadius + effect.ringGrowth * dt
+
+		for pi = #effect.particles, 1, -1 do
+			local particle = effect.particles[pi]
+			particle.ttl = particle.ttl - dt
+			particle.x = particle.x + particle.vx * dt
+			particle.y = particle.y + particle.vy * dt
+			particle.vx = particle.vx * 0.94
+			particle.vy = particle.vy * 0.94
+			if particle.ttl <= 0 then
+				table.remove(effect.particles, pi)
+			end
+		end
+
+		if effect.ttl <= 0 and #effect.particles == 0 then
+			table.remove(self.shipHitEffects, i)
+		end
+	end
 end
 
 function gameplay:enter()
@@ -543,7 +627,16 @@ function gameplay:handleBulletAsteroidCollisions()
 end
 
 function gameplay:damagePlayer()
-    sounds.crash:stop()
+	if self:isShipInvincible() then
+		return
+	end
+
+	local hitX = self.ship.x
+	local hitY = self.ship.y
+	self:spawnShipHitEffect(hitX, hitY)
+	self:applyAsteroidHitRecoil(hitX, hitY)
+
+	sounds.crash:stop()
 	sounds.crash:play()
 	self.lives = self.lives - 1
 	local centerX, centerY = self:getArena()
@@ -551,12 +644,19 @@ function gameplay:damagePlayer()
 	self.ship.y = centerY
 	self.ship.vx = 0
 	self.ship.vy = 0
+	self.shipWallAccelLockTimer = 0.18
+	self.shipInvincibleTimer = SHIP_INVINCIBLE_DURATION
 	if self.lives <= 0 then
 		self.isGameOver = true
+		self.shipInvincibleTimer = 0
 	end
 end
 
 function gameplay:handleShipBulletCollision()
+	if self:isShipInvincible() then
+		return
+	end
+
 	local ship = self.ship
 	local playerPolarity = self:getPlayerPolarity()
 
@@ -574,7 +674,10 @@ function gameplay:handleShipBulletCollision()
 end
 
 function gameplay:handleShipAsteroidCollision()
-	if debug.invn then return end
+	if self:isShipInvincible() then
+		return
+	end
+
 	local ship = self.ship
 	local playerPolarity = self:getPlayerPolarity()
 	for _, asteroid in ipairs(self.asteroids) do
@@ -641,6 +744,8 @@ function gameplay:update(dt)
 		return
 	end
 	self.escapeWasDown = escapeDown
+	self.shipInvincibleTimer = math.max(0, (self.shipInvincibleTimer or 0) - dt)
+	self:updateShipHitEffects(dt)
 
 	if self.isGameOver then
 		local restartDown = love.keyboard.isDown("r")
@@ -699,7 +804,32 @@ function gameplay:update(dt)
 	end
 end
 
+function gameplay:drawShipHitEffects()
+	for _, effect in ipairs(self.shipHitEffects) do
+		local t = math.max(0, effect.ttl / effect.duration)
+		local ringAlpha = 0.75 * t
+		love.graphics.setColor(themes.current.secondary[1], themes.current.secondary[2], themes.current.secondary[3], ringAlpha)
+		love.graphics.setLineWidth(2)
+		love.graphics.circle("line", effect.x, effect.y, effect.ringRadius)
+
+		for _, particle in ipairs(effect.particles) do
+			local p = math.max(0, particle.ttl / 0.42)
+			local alpha = 0.9 * p
+			love.graphics.setColor(themes.current.primary[1], themes.current.primary[2], themes.current.primary[3], alpha)
+			love.graphics.circle("fill", particle.x, particle.y, particle.radius)
+		end
+	end
+end
+
 function gameplay:drawShip()
+	local isInvincible = (self.shipInvincibleTimer or 0) > 0
+	if isInvincible then
+		local blinkRate = 14
+		if math.floor(self.shipInvincibleTimer * blinkRate) % 2 == 0 then
+			return
+		end
+	end
+
 	local ship = self.ship
 	local r = ship.radius
 
@@ -778,6 +908,7 @@ function gameplay:draw()
 	self:drawArena()
 	self:drawAsteroids()
 	self:drawBullets()
+	self:drawShipHitEffects()
 	self:drawShip()
 	self:drawHud()
 	self:drawGameOver()
