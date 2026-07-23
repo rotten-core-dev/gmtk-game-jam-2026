@@ -4,6 +4,7 @@ local push = require "lib.push"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
 local GameplayState = require "src.states.gameplay"
+local state = require "src.state"
 
 local menu = {}
 
@@ -132,7 +133,7 @@ function menu:executeChoice()
     elseif choice == "Play" then
         state.switch(GameplayState)
     elseif choice == "Options" then
-        -- Gamestate.switch(OptionsMenuState)
+        -- state.switch(OptionsMenuState)
     end
 end
 

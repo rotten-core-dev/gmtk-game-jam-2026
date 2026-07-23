@@ -276,7 +276,7 @@ function gameplay:resetRun()
 	self.isPoppingWave = false
 	self.waitingForNextWaveStart = false
 	self.popTimer = 0
-	self.popInterval = 0.32
+	self.popInterval = 0.5
 	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
@@ -580,11 +580,17 @@ end
 function gameplay:handleShipAsteroidCollision()
 	if debug.invn then return end
 	local ship = self.ship
+	local playerPolarity = self:getPlayerPolarity()
 	for _, asteroid in ipairs(self.asteroids) do
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
 		if dist <= ship.radius + asteroid.radius then
-			self:damagePlayer()
-			return
+			local asteroidPolarity = self:getAsteroidPolarity(asteroid)
+			if asteroidPolarity == playerPolarity then
+				resolveBodyCollision(ship, asteroid, 1.05)
+			else
+				self:damagePlayer()
+				return
+			end
 		end
 	end
 end

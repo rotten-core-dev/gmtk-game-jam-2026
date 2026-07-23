@@ -1,6 +1,6 @@
-local state = require "src.state"
 local moonshine = require "lib.moonshine"
 local push = require "lib.push"
+local state = require "src.state"
 
 -- local shakes = require "src.system.shakes"
 
@@ -79,12 +79,16 @@ function love.load()
     effect.crt.scaleFactor = {1,1}--{0.95,0.95}
     effect.crt.feather = 0.01 --0.02
     
-  
     -- Start the sequence!
     state.switch(MenuState)
 end
 
 function love.update(dt)
+    local current = state.current()
+    if current and current.update then
+        current:update(dt)
+    end
+
     CurrentTime = love.timer.getTime()
 
     local current = state.current()
@@ -102,9 +106,10 @@ function love.draw()
                 if current and current.draw then
                     current:draw()
                 end
-            end)
+           end)
         push:finish()
     
+
 
 end
 

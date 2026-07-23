@@ -7,7 +7,7 @@ local intro = {}
 function intro:enter()
     -- Wait 1 second, then switch states
     Timer.after(1.0, function()
-        Gamestate.switch(SplashState)
+        state.switch(SplashState)
     end)
 end
 

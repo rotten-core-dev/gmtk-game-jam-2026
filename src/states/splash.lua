@@ -19,7 +19,11 @@ function splash:enter()
         Timer.after(1.0, function()
             shakes.trigger(2*shakes.current.power,1.0,CurrentTime)
            Timer.after(1.0, function()
+<<<<<<< HEAD
                 state.switch(TitleState)
+=======
+                    state.switch(TitleState)
+>>>>>>> 5f7cd0f1f1607228453466b40e5cae889db35eb2
             end)
         end)
     --end)

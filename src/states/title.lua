@@ -9,6 +9,7 @@ local title = {}
 
 function title:enter()
     self.showText = true
+    sounds.crash:stop()
     sounds.crash:play()
 end
 
