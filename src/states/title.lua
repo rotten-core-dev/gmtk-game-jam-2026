@@ -16,7 +16,7 @@ function title:update(dt)
     Timer.update(dt)
     CurrentTime = love.timer.getTime()
     shakes.trigger(shakes.current.power,0.5,CurrentTime)
-    Timer.after(2, function()
+    Timer.after(1.5, function()
         Gamestate.switch(MenuState)
     end)
     

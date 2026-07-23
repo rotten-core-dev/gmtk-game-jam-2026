@@ -8,8 +8,8 @@ local GameplayState = require "src.states.gameplay"
 local menu = {}
 
 function menu:enter()
+    sounds.crash:stop()
     sounds.crash:play()
-    
     -- Define your exact list of choices
     self.options = {"Play", "Options", "Exit"}
     self.selected = 1 -- Start highlighted on item 1

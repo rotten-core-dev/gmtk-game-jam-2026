@@ -111,7 +111,7 @@ function gameplay:getArena()
 end
 
 function gameplay:getOrbitState()
-	local orbitPeriod = 3
+	local orbitPeriod = 6
 	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
 	local completedOrbits = math.floor(elapsed / orbitPeriod)
 	local orbitProgress = (elapsed % orbitPeriod) / orbitPeriod
@@ -239,6 +239,7 @@ function gameplay:resetRun()
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.fireCooldown = 0
+	self.shipWallAccelLockTimer = 0
 	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
@@ -289,14 +290,14 @@ function gameplay:applyAsteroidPolarityForces(dt)
 			local ny = dy / dist
 
 			if asteroid.polarity == playerPolarity then
-				local baseRepel = 160 / (1 + dist * 0.03)
+				local baseRepel = 200 / (1 + dist * 0.03)
 				local approachSpeed = ship.vx * nx + ship.vy * ny
 				local bonusRepel = math.max(0, approachSpeed) * 1.15
 				local repelForce = baseRepel + bonusRepel
 				asteroid.vx = asteroid.vx + nx * repelForce * dt
 				asteroid.vy = asteroid.vy + ny * repelForce * dt
 			else
-				local attractForce = 160 / (1 + dist * 0.03)
+				local attractForce = 200 / (1 + dist * 0.03)
 				asteroid.vx = asteroid.vx - nx * attractForce * dt
 				asteroid.vy = asteroid.vy - ny * attractForce * dt
 			end
@@ -315,6 +316,7 @@ end
 function gameplay:updateShip(dt)
 	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
 	local ship = self.ship
+	self.shipWallAccelLockTimer = math.max(0, (self.shipWallAccelLockTimer or 0) - dt)
 
 	local inputX, inputY = 0, 0
 	if love.keyboard.isDown("a") or love.keyboard.isDown("left") then
@@ -335,11 +337,13 @@ function gameplay:updateShip(dt)
 		inputX, inputY = inputX / mag, inputY / mag
 	end
 
-	local accel = 280
-	ship.vx = ship.vx + inputX * accel * dt
-	ship.vy = ship.vy + inputY * accel * dt
+	if self.shipWallAccelLockTimer <= 0 then
+		local accel = 500
+		ship.vx = ship.vx + inputX * accel * dt
+		ship.vy = ship.vy + inputY * accel * dt
+	end
 
-	local drag = 0.985
+	local drag = 1.0
 	ship.vx = ship.vx * drag
 	ship.vy = ship.vy * drag
 
@@ -353,7 +357,10 @@ function gameplay:updateShip(dt)
 
 	ship.x = ship.x + ship.vx * dt
 	ship.y = ship.y + ship.vy * dt
-	bounceInsideEllipse(ship, centerX, centerY, arenaRadiusX, arenaRadiusY, 0.92)
+	local bouncedOnWall = bounceInsideEllipse(ship, centerX, centerY, arenaRadiusX, arenaRadiusY, 1.18)
+	if bouncedOnWall then
+		self.shipWallAccelLockTimer = 0.22
+	end
 
 	local mouseX, mouseY = love.mouse.getPosition()
 	local gameX, gameY = push:toGame(mouseX, mouseY)
@@ -396,8 +403,9 @@ function gameplay:updateAsteroids(dt)
 end
 
 function gameplay:handleAsteroidAsteroidCollisions()
-	local destroySpeedThreshold = 190
-	local toDestroy = {}
+	local splitSpeedThreshold = 190
+	local toRemove = {}
+	local toSplit = {}
 
 	for i = 1, #self.asteroids - 1 do
 		local a = self.asteroids[i]
@@ -413,9 +421,23 @@ function gameplay:handleAsteroidAsteroidCollisions()
 				local relVy = a.vy - b.vy
 				local relSpeed = length(relVx, relVy)
 
-				if a.polarity ~= b.polarity and relSpeed >= destroySpeedThreshold then
-					toDestroy[i] = true
-					toDestroy[j] = true
+				if a.polarity ~= b.polarity and relSpeed >= splitSpeedThreshold then
+					local splitA = a.size ~= "small"
+					local splitB = b.size ~= "small"
+
+					-- Small asteroids should bounce even in high-speed opposite-color hits.
+					if not splitA or not splitB then
+						resolveBodyCollision(a, b, 0.9)
+					end
+
+					if splitA and not toRemove[i] then
+						toRemove[i] = true
+						toSplit[i] = a
+					end
+					if splitB and not toRemove[j] then
+						toRemove[j] = true
+						toSplit[j] = b
+					end
 				else
 					resolveBodyCollision(a, b, 0.9)
 				end
@@ -424,9 +446,13 @@ function gameplay:handleAsteroidAsteroidCollisions()
 	end
 
 	for i = #self.asteroids, 1, -1 do
-		if toDestroy[i] then
+		if toRemove[i] then
 			table.remove(self.asteroids, i)
 		end
+	end
+
+	for _, asteroid in pairs(toSplit) do
+		self:splitAsteroid(asteroid)
 	end
 end
 
@@ -480,6 +506,7 @@ function gameplay:handleBulletAsteroidCollisions()
 end
 
 function gameplay:damagePlayer()
+    sounds.crash:stop()
 	sounds.crash:play()
 	self.lives = self.lives - 1
 	local centerX, centerY = self:getArena()
