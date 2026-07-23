@@ -7,10 +7,6 @@ local state = require "src.state"
 local IntroState = require "src.states.intro"
 local MenuState = require "src.states.menu"
 
--- Virtual resolution (design resolution)
-local VIRTUAL_WIDTH = 640
-local VIRTUAL_HEIGHT = 480
-
 -- Actual window size (can be any size)
 --WINDOW_WIDTH = 640
 --WINDOW_HEIGHT = 480
@@ -66,11 +62,11 @@ function love.load()
     -- effect.glow.strength = 0
     -- effect.chromasep.angle = 20
     -- effect.chromasep.radius = 0--chromasep_base
-    effect.scanlines.thickness = 0.6
+--    effect.scanlines.thickness = 0.6
     effect.scanlines.opacity = 0.2
-    effect.scanlines.width = 2
+  --  effect.scanlines.width = 2
     effect.crt.distortionFactor = {1.01,1.01}
-    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
+--    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
     effect.crt.feather = 0.01 --0.02
     
     -- Start the sequence!
@@ -94,15 +90,12 @@ end
 -- Override love.draw so Moonshine wraps around whatever HUMP is currently drawing
 function love.draw()
 
-   --     push:start()
             effect(function()
                 local current = state.current()
                 if current and current.draw then
                     current:draw()
                 end
-           end)
- --       push:finish()
-    
+           end)   
 
 
 end

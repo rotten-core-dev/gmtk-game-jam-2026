@@ -28,30 +28,31 @@ local function angleTo(dx, dy)
 	return a
 end
 
-local function isOutsideEllipse(x, y, centerX, centerY, radiusX, radiusY)
+local function isOutsideCircle(x, y, centerX, centerY, radius)
 	local dx = x - centerX
 	local dy = y - centerY
-	return (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY) > 1
+	return dx * dx + dy * dy > radius * radius
 end
 
-local function bounceInsideEllipse(body, centerX, centerY, radiusX, radiusY, bounce)
+local function bounceInsideCircle(body, centerX, centerY, radius, bounce)
 	local dx = body.x - centerX
 	local dy = body.y - centerY
-	local effectiveRadiusX = radiusX - body.radius
-	local effectiveRadiusY = radiusY - body.radius
-	local normalized = (dx * dx) / (effectiveRadiusX * effectiveRadiusX)
-		+ (dy * dy) / (effectiveRadiusY * effectiveRadiusY)
-
-	if normalized <= 1 then
+	local dist = length(dx, dy)
+	local effectiveRadius = radius - body.radius
+	if effectiveRadius <= 0 or dist <= effectiveRadius then
 		return false
 	end
 
-	local scale = 1 / math.sqrt(normalized)
+	if dist == 0 then
+		dx, dy, dist = 1, 0, 1
+	end
+
+	local scale = effectiveRadius / dist
 	body.x = centerX + dx * scale
 	body.y = centerY + dy * scale
 
-	local nx = (body.x - centerX) / (effectiveRadiusX * effectiveRadiusX)
-	local ny = (body.y - centerY) / (effectiveRadiusY * effectiveRadiusY)
+	local nx = body.x - centerX
+	local ny = body.y - centerY
 	local normalLength = length(nx, ny)
 	if normalLength == 0 then
 		return false
@@ -100,11 +101,12 @@ local function resolveBodyCollision(a, b, bounce)
 end
 
 function gameplay:getArena()
-	local shrinkAmount = 0.98
+	local shrinkAmount = 0.95
 	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
-	return worldW * 0.5, worldH * 0.5, worldH * 0.6 * shrinkScale, worldH * 0.6 * shrinkScale
+	local arenaLineWidth = 4
+	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
 end
 
 function gameplay:getOrbitState()
@@ -193,12 +195,12 @@ function gameplay:spawnAsteroid(x, y, size, polarity)
 end
 
 function gameplay:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
-	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local centerX, centerY, arenaRadius = self:getArena()
 	for _ = 1, 60 do
 		local angle = love.math.random() * math.pi * 2
 		local distance = math.sqrt(love.math.random())
-		local x = centerX + math.cos(angle) * distance * (arenaRadiusX - 48)
-		local y = centerY + math.sin(angle) * distance * (arenaRadiusY - 48)
+		local x = centerX + math.cos(angle) * distance * (arenaRadius - 48)
+		local y = centerY + math.sin(angle) * distance * (arenaRadius - 48)
 
 		if length(x - shipX, y - shipY) >= minShipDistance then
 			local overlap = false
@@ -216,7 +218,7 @@ function gameplay:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 	end
 
 	local fallbackAngle = love.math.random() * math.pi * 2
-	return centerX + math.cos(fallbackAngle) * (arenaRadiusX - 56), centerY + math.sin(fallbackAngle) * (arenaRadiusY - 56)
+	return centerX + math.cos(fallbackAngle) * (arenaRadius - 56), centerY + math.sin(fallbackAngle) * (arenaRadius - 56)
 end
 
 function gameplay:spawnWave(count)
@@ -347,7 +349,7 @@ function gameplay:applyAsteroidPolarityForces(dt)
 end
 
 function gameplay:updateShip(dt)
-	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local centerX, centerY, arenaRadius = self:getArena()
 	local ship = self.ship
 	self.shipWallAccelLockTimer = math.max(0, (self.shipWallAccelLockTimer or 0) - dt)
 
@@ -390,7 +392,7 @@ function gameplay:updateShip(dt)
 
 	ship.x = ship.x + ship.vx * dt
 	ship.y = ship.y + ship.vy * dt
-	local bouncedOnWall = bounceInsideEllipse(ship, centerX, centerY, arenaRadiusX, arenaRadiusY, 1.18)
+	local bouncedOnWall = bounceInsideCircle(ship, centerX, centerY, arenaRadius, 1.18)
 	if bouncedOnWall then
 		self.shipWallAccelLockTimer = 0.22
 	end
@@ -406,7 +408,7 @@ function gameplay:updateShip(dt)
 end
 
 function gameplay:updateBullets(dt)
-	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local centerX, centerY, arenaRadius = self:getArena()
 
 	for i = #self.bullets, 1, -1 do
 		local bullet = self.bullets[i]
@@ -417,20 +419,20 @@ function gameplay:updateBullets(dt)
 
 		if bullet.ttl <= 0 then
 			table.remove(self.bullets, i)
-		elseif isOutsideEllipse(bullet.x, bullet.y, centerX, centerY, arenaRadiusX - bullet.radius, arenaRadiusY - bullet.radius) then
-			bounceInsideEllipse(bullet, centerX, centerY, arenaRadiusX, arenaRadiusY, 0.98)
+		elseif isOutsideCircle(bullet.x, bullet.y, centerX, centerY, arenaRadius - bullet.radius) then
+			bounceInsideCircle(bullet, centerX, centerY, arenaRadius, 0.98)
 		end
 	end
 end
 
 function gameplay:updateAsteroids(dt)
-	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local centerX, centerY, arenaRadius = self:getArena()
 	self:applyAsteroidPolarityForces(dt)
 
 	for _, asteroid in ipairs(self.asteroids) do
 		asteroid.x = asteroid.x + asteroid.vx * dt
 		asteroid.y = asteroid.y + asteroid.vy * dt
-		bounceInsideEllipse(asteroid, centerX, centerY, arenaRadiusX, arenaRadiusY, 1.0)
+		bounceInsideCircle(asteroid, centerX, centerY, arenaRadius, 1.0)
 	end
 end
 
@@ -734,22 +736,22 @@ function gameplay:drawHud()
 	love.graphics.print("SCORE: " .. tostring(self.score), 16, 12)
 	love.graphics.print("LIVES: " .. tostring(self.lives), 16, 28)
 	love.graphics.print("WAVE: " .. tostring(self.wave), 16, 44)
-	love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
+	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then
 		love.graphics.printf("WAVE CLEAR - PRESS ENTER OR SPACE FOR NEXT", 0, 220, 640, "center")
 	end
 end
 
 function gameplay:drawArena()
-	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local centerX, centerY, arenaRadius = self:getArena()
 	local _, orbitAngle = self:getOrbitState()
-	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadiusX
-	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadiusY
+	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
+	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
 	local orbiterRadius = 6
 
 	love.graphics.setColor(self:getArenaColor())
 	love.graphics.setLineWidth(4)
-	love.graphics.ellipse("line", centerX, centerY, arenaRadiusX, arenaRadiusY)
+	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
 
