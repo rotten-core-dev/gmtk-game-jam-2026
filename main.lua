@@ -20,6 +20,8 @@ local effect
 
 function love.load()
 
+    love.window.setTitle("COUNTEROIDS")
+
     WINDOW_HEIGHT = love.graphics.getHeight()
     WINDOW_WIDTH = love.graphics.getWidth()
 

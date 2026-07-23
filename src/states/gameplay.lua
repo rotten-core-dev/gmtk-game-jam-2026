@@ -27,20 +27,115 @@ local function angleTo(dx, dy)
 	return a
 end
 
-local function wrap(value, maxValue)
-	if value < 0 then
-		return value + maxValue
-	elseif value > maxValue then
-		return value - maxValue
+local function isOutsideEllipse(x, y, centerX, centerY, radiusX, radiusY)
+	local dx = x - centerX
+	local dy = y - centerY
+	return (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY) > 1
+end
+
+local function bounceInsideEllipse(body, centerX, centerY, radiusX, radiusY, bounce)
+	local dx = body.x - centerX
+	local dy = body.y - centerY
+	local effectiveRadiusX = radiusX - body.radius
+	local effectiveRadiusY = radiusY - body.radius
+	local normalized = (dx * dx) / (effectiveRadiusX * effectiveRadiusX)
+		+ (dy * dy) / (effectiveRadiusY * effectiveRadiusY)
+
+	if normalized <= 1 then
+		return false
 	end
-	return value
+
+	local scale = 1 / math.sqrt(normalized)
+	body.x = centerX + dx * scale
+	body.y = centerY + dy * scale
+
+	local nx = (body.x - centerX) / (effectiveRadiusX * effectiveRadiusX)
+	local ny = (body.y - centerY) / (effectiveRadiusY * effectiveRadiusY)
+	local normalLength = length(nx, ny)
+	if normalLength == 0 then
+		return false
+	end
+	nx = nx / normalLength
+	ny = ny / normalLength
+
+	local dot = body.vx * nx + body.vy * ny
+	if dot > 0 then
+		body.vx = body.vx - (1 + bounce) * dot * nx
+		body.vy = body.vy - (1 + bounce) * dot * ny
+	end
+
+	return true
+end
+
+local function resolveBodyCollision(a, b, bounce)
+	local dx = b.x - a.x
+	local dy = b.y - a.y
+	local dist = length(dx, dy)
+	if dist == 0 then
+		dx, dy, dist = 1, 0, 1
+	end
+
+	local nx = dx / dist
+	local ny = dy / dist
+	local minDist = a.radius + b.radius
+	if dist < minDist then
+		local overlap = minDist - dist
+		a.x = a.x - nx * overlap * 0.5
+		a.y = a.y - ny * overlap * 0.5
+		b.x = b.x + nx * overlap * 0.5
+		b.y = b.y + ny * overlap * 0.5
+	end
+
+	local rvx = b.vx - a.vx
+	local rvy = b.vy - a.vy
+	local closingSpeed = rvx * nx + rvy * ny
+	if closingSpeed < 0 then
+		local impulse = -(1 + bounce) * closingSpeed * 0.5
+		a.vx = a.vx - impulse * nx
+		a.vy = a.vy - impulse * ny
+		b.vx = b.vx + impulse * nx
+		b.vy = b.vy + impulse * ny
+	end
 end
 
 function gameplay:getWorldSize()
 	return push._WWIDTH or 640, push._WHEIGHT or 480
 end
 
-function gameplay:spawnAsteroid(x, y, size)
+function gameplay:getArena()
+	local worldW, worldH = self:getWorldSize()
+	return worldW * 0.5, worldH * 0.5, worldW * 0.6, worldH * 0.6
+end
+
+function gameplay:getOrbitState()
+	local orbitPeriod = 10
+	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
+	local completedOrbits = math.floor(elapsed / orbitPeriod)
+	local orbitProgress = (elapsed % orbitPeriod) / orbitPeriod
+	local orbitAngle = -math.pi * 0.5 + orbitProgress * math.pi * 2
+	return completedOrbits, orbitAngle
+end
+
+function gameplay:getArenaPlayerColor()
+	return self:getColorForPolarity(self:getPlayerPolarity())
+end
+
+function gameplay:getPlayerPolarity()
+	local completedOrbits = self:getOrbitState()
+	if completedOrbits % 2 == 0 then
+		return "secondary"
+	end
+	return "primary"
+end
+
+function gameplay:getColorForPolarity(polarity)
+	if polarity == "secondary" then
+		return themes.current.secondary
+	end
+	return themes.current.primary
+end
+
+function gameplay:spawnAsteroid(x, y, size, polarity)
 	local radiusBySize = {
 		large = 30,
 		medium = 18,
@@ -63,37 +158,41 @@ function gameplay:spawnAsteroid(x, y, size)
 		vy = math.sin(angle) * speed,
 		size = size,
 		radius = radiusBySize[size],
+		polarity = polarity or "primary",
 	})
 end
 
 function gameplay:spawnWave(count)
-	local worldW, worldH = self:getWorldSize()
+	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local asteroidPolarities = {}
+	local primaryCount = math.floor(count / 2)
+	for _ = 1, primaryCount do
+		table.insert(asteroidPolarities, "primary")
+	end
+	for _ = primaryCount + 1, count do
+		table.insert(asteroidPolarities, "secondary")
+	end
+	for i = #asteroidPolarities, 2, -1 do
+		local swapIndex = love.math.random(i)
+		asteroidPolarities[i], asteroidPolarities[swapIndex] = asteroidPolarities[swapIndex], asteroidPolarities[i]
+	end
+
 	for _ = 1, count do
-		local side = love.math.random(1, 4)
-		local x, y
-		if side == 1 then
-			x = love.math.random(0, worldW)
-			y = -20
-		elseif side == 2 then
-			x = worldW + 20
-			y = love.math.random(0, worldH)
-		elseif side == 3 then
-			x = love.math.random(0, worldW)
-			y = worldH + 20
-		else
-			x = -20
-			y = love.math.random(0, worldH)
-		end
-		self:spawnAsteroid(x, y, "large")
+		local polarity = asteroidPolarities[_]
+		local angle = love.math.random() * math.pi * 2
+		local distance = math.sqrt(love.math.random())
+		local x = centerX + math.cos(angle) * distance * (arenaRadiusX - 48)
+		local y = centerY + math.sin(angle) * distance * (arenaRadiusY - 48)
+		self:spawnAsteroid(x, y, "large", polarity)
 	end
 end
 
 function gameplay:resetRun()
-	local worldW, worldH = self:getWorldSize()
+	local centerX, centerY = self:getArena()
 
 	self.ship = {
-		x = worldW * 0.5,
-		y = worldH * 0.5,
+		x = centerX,
+		y = centerY,
 		vx = 0,
 		vy = 0,
 		angle = 0,
@@ -110,6 +209,7 @@ function gameplay:resetRun()
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.fireCooldown = 0
+	self.orbitStartTime = love.timer.getTime()
 
 	self:spawnWave(5)
 end
@@ -128,25 +228,62 @@ function gameplay:shoot()
 		vy = ship.vy + math.sin(ship.angle) * bulletSpeed,
 		ttl = 1.1,
 		radius = 2,
+		polarity = self:getPlayerPolarity(),
 	})
 end
 
 function gameplay:splitAsteroid(asteroid)
 	if asteroid.size == "large" then
-		self:spawnAsteroid(asteroid.x, asteroid.y, "medium")
-		self:spawnAsteroid(asteroid.x, asteroid.y, "medium")
+		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
+		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
 		self.score = self.score + 20
 	elseif asteroid.size == "medium" then
-		self:spawnAsteroid(asteroid.x, asteroid.y, "small")
-		self:spawnAsteroid(asteroid.x, asteroid.y, "small")
+		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
+		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
 		self.score = self.score + 40
 	else
 		self.score = self.score + 60
 	end
 end
 
+function gameplay:applyAsteroidPolarityForces(dt)
+	local ship = self.ship
+	local playerPolarity = self:getPlayerPolarity()
+
+	for _, asteroid in ipairs(self.asteroids) do
+		local dx = asteroid.x - ship.x
+		local dy = asteroid.y - ship.y
+		local dist = length(dx, dy)
+		if dist > 0.001 then
+			local nx = dx / dist
+			local ny = dy / dist
+
+			if asteroid.polarity == playerPolarity then
+				local baseRepel = 160 / (1 + dist * 0.03)
+				local approachSpeed = ship.vx * nx + ship.vy * ny
+				local bonusRepel = math.max(0, approachSpeed) * 1.15
+				local repelForce = baseRepel + bonusRepel
+				asteroid.vx = asteroid.vx + nx * repelForce * dt
+				asteroid.vy = asteroid.vy + ny * repelForce * dt
+			else
+				local attractForce = 110 / (1 + dist * 0.02)
+				asteroid.vx = asteroid.vx - nx * attractForce * dt
+				asteroid.vy = asteroid.vy - ny * attractForce * dt
+			end
+		end
+
+		local asteroidSpeed = length(asteroid.vx, asteroid.vy)
+		local maxAsteroidSpeed = 300
+		if asteroidSpeed > maxAsteroidSpeed then
+			local speedScale = maxAsteroidSpeed / asteroidSpeed
+			asteroid.vx = asteroid.vx * speedScale
+			asteroid.vy = asteroid.vy * speedScale
+		end
+	end
+end
+
 function gameplay:updateShip(dt)
-	local worldW, worldH = self:getWorldSize()
+	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
 	local ship = self.ship
 
 	local inputX, inputY = 0, 0
@@ -184,8 +321,9 @@ function gameplay:updateShip(dt)
 		ship.vy = ship.vy * k
 	end
 
-	ship.x = wrap(ship.x + ship.vx * dt, worldW)
-	ship.y = wrap(ship.y + ship.vy * dt, worldH)
+	ship.x = ship.x + ship.vx * dt
+	ship.y = ship.y + ship.vy * dt
+	bounceInsideEllipse(ship, centerX, centerY, arenaRadiusX, arenaRadiusY, 0.92)
 
 	local mouseX, mouseY = love.mouse.getPosition()
 	local gameX, gameY = push:toGame(mouseX, mouseY)
@@ -199,25 +337,62 @@ function gameplay:updateShip(dt)
 end
 
 function gameplay:updateBullets(dt)
-	local worldW, worldH = self:getWorldSize()
+	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
 
 	for i = #self.bullets, 1, -1 do
 		local bullet = self.bullets[i]
-		bullet.x = wrap(bullet.x + bullet.vx * dt, worldW)
-		bullet.y = wrap(bullet.y + bullet.vy * dt, worldH)
+		bullet.x = bullet.x + bullet.vx * dt
+		bullet.y = bullet.y + bullet.vy * dt
 		bullet.ttl = bullet.ttl - dt
-		if bullet.ttl <= 0 then
+		if bullet.ttl <= 0 or isOutsideEllipse(bullet.x, bullet.y, centerX, centerY, arenaRadiusX - bullet.radius, arenaRadiusY - bullet.radius) then
 			table.remove(self.bullets, i)
 		end
 	end
 end
 
 function gameplay:updateAsteroids(dt)
-	local worldW, worldH = self:getWorldSize()
+	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	self:applyAsteroidPolarityForces(dt)
 
 	for _, asteroid in ipairs(self.asteroids) do
-		asteroid.x = wrap(asteroid.x + asteroid.vx * dt, worldW)
-		asteroid.y = wrap(asteroid.y + asteroid.vy * dt, worldH)
+		asteroid.x = asteroid.x + asteroid.vx * dt
+		asteroid.y = asteroid.y + asteroid.vy * dt
+		bounceInsideEllipse(asteroid, centerX, centerY, arenaRadiusX, arenaRadiusY, 1.0)
+	end
+end
+
+function gameplay:handleAsteroidAsteroidCollisions()
+	local destroySpeedThreshold = 190
+	local toDestroy = {}
+
+	for i = 1, #self.asteroids - 1 do
+		local a = self.asteroids[i]
+		for j = i + 1, #self.asteroids do
+			local b = self.asteroids[j]
+			local dx = b.x - a.x
+			local dy = b.y - a.y
+			local dist = length(dx, dy)
+			local minDist = a.radius + b.radius
+
+			if dist <= minDist then
+				local relVx = a.vx - b.vx
+				local relVy = a.vy - b.vy
+				local relSpeed = length(relVx, relVy)
+
+				if a.polarity ~= b.polarity and relSpeed >= destroySpeedThreshold then
+					toDestroy[i] = true
+					toDestroy[j] = true
+				else
+					resolveBodyCollision(a, b, 0.9)
+				end
+			end
+		end
+	end
+
+	for i = #self.asteroids, 1, -1 do
+		if toDestroy[i] then
+			table.remove(self.asteroids, i)
+		end
 	end
 end
 
@@ -229,7 +404,7 @@ function gameplay:handleBulletAsteroidCollisions()
 		for ai = #self.asteroids, 1, -1 do
 			local asteroid = self.asteroids[ai]
 			local dist = length(bullet.x - asteroid.x, bullet.y - asteroid.y)
-			if dist <= bullet.radius + asteroid.radius then
+			if dist <= bullet.radius + asteroid.radius and bullet.polarity ~= asteroid.polarity then
 				table.remove(self.bullets, bi)
 				table.remove(self.asteroids, ai)
 				self:splitAsteroid(asteroid)
@@ -252,8 +427,9 @@ function gameplay:handleShipAsteroidCollision()
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
 		if dist <= ship.radius + asteroid.radius then
 			self.lives = self.lives - 1
-			ship.x = (push._WWIDTH or 640) * 0.5
-			ship.y = (push._WHEIGHT or 480) * 0.5
+			local centerX, centerY = self:getArena()
+			ship.x = centerX
+			ship.y = centerY
 			ship.vx = 0
 			ship.vy = 0
 			if self.lives <= 0 then
@@ -295,6 +471,7 @@ function gameplay:update(dt)
 
 	self:updateBullets(dt)
 	self:updateAsteroids(dt)
+	self:handleAsteroidAsteroidCollisions()
 	self:handleBulletAsteroidCollisions()
 	self:handleShipAsteroidCollision()
 
@@ -315,20 +492,20 @@ function gameplay:drawShip()
 	local rightX = ship.x + math.cos(ship.angle - 2.5) * r
 	local rightY = ship.y + math.sin(ship.angle - 2.5) * r
 
-	love.graphics.setColor(themes.current.primary)
+	love.graphics.setColor(self:getArenaPlayerColor())
 	love.graphics.polygon("line", noseX, noseY, leftX, leftY, rightX, rightY)
 end
 
 function gameplay:drawBullets()
-	love.graphics.setColor(themes.current.secondary)
 	for _, bullet in ipairs(self.bullets) do
+		love.graphics.setColor(self:getColorForPolarity(bullet.polarity))
 		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
 	end
 end
 
 function gameplay:drawAsteroids()
-	love.graphics.setColor(themes.current.primary)
 	for _, asteroid in ipairs(self.asteroids) do
+		love.graphics.setColor(self:getColorForPolarity(asteroid.polarity))
 		love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius)
 	end
 end
@@ -342,6 +519,18 @@ function gameplay:drawHud()
 	love.graphics.print("LIVES: " .. tostring(self.lives), 16, 28)
 	love.graphics.print("WAVE: " .. tostring(self.wave), 16, 44)
 	love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
+end
+
+function gameplay:drawArena()
+	local centerX, centerY, arenaRadiusX, arenaRadiusY = self:getArena()
+	local _, orbitAngle = self:getOrbitState()
+	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadiusX
+	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadiusY
+	local orbiterRadius = 6
+
+	love.graphics.setColor(self:getArenaPlayerColor())
+	love.graphics.ellipse("line", centerX, centerY, arenaRadiusX, arenaRadiusY)
+	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
 
 function gameplay:drawGameOver()
@@ -364,6 +553,7 @@ end
 
 function gameplay:draw()
 	love.graphics.clear(themes.current.background)
+	self:drawArena()
 	self:drawAsteroids()
 	self:drawBullets()
 	self:drawShip()
