@@ -105,10 +105,11 @@ function gameplay:getWorldSize()
 end
 
 function gameplay:getArena()
+	local shrinkAmount = 0.98
 	local worldW, worldH = self:getWorldSize()
 	local completedOrbits = self:getOrbitState()
-	local shrinkScale = math.max(0.35, 0.9 ^ completedOrbits)
-	return worldW * 0.5, worldH * 0.5, worldW * 0.6 * shrinkScale, worldH * 0.6 * shrinkScale
+	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
+	return worldW * 0.5, worldH * 0.5, worldH * 0.6 * shrinkScale, worldH * 0.6 * shrinkScale
 end
 
 function gameplay:getOrbitState()
@@ -577,6 +578,7 @@ function gameplay:handleShipBulletCollision()
 end
 
 function gameplay:handleShipAsteroidCollision()
+	if debug.invn then return end
 	local ship = self.ship
 	for _, asteroid in ipairs(self.asteroids) do
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
@@ -720,7 +722,7 @@ end
 function gameplay:drawAsteroids()
 	for _, asteroid in ipairs(self.asteroids) do
 		love.graphics.setColor(self:getColorForPolarity(self:getAsteroidPolarity(asteroid)))
-		love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius)
+		love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
 	end
 end
 
@@ -746,6 +748,7 @@ function gameplay:drawArena()
 	local orbiterRadius = 6
 
 	love.graphics.setColor(self:getArenaColor())
+	love.graphics.setLineWidth(4)
 	love.graphics.ellipse("line", centerX, centerY, arenaRadiusX, arenaRadiusY)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end

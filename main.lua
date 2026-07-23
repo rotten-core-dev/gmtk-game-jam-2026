@@ -21,6 +21,10 @@ local effect
 
 function love.load()
 
+    debug = {
+        invn = true,
+    }
+
     love.window.setTitle("COUNTEROIDS")
 
     WINDOW_HEIGHT = love.graphics.getHeight()
@@ -53,7 +57,27 @@ function love.load()
     
     -- Initialize your shader stack (e.g., CRT and Vignette effect)
     effect = moonshine(moonshine.effects.crt)
-                      .chain(moonshine.effects.vignette)
+        .chain(moonshine.effects.scanlines)
+    -- .chain(moonshine.effects.chromasep)
+    --.chain(moonshine.effects.posterize)
+    
+    --.chain(moonshine.effects.desaturate)
+    --.chain(moonshine.effects.vignette)
+    
+        
+    -- effect.pixelate.size = {4,4}
+    -- effect.pixelate.feedback = 0.5
+    -- effect.posterize.num_bands = 10
+
+    -- effect.glow.strength = 0
+    -- effect.chromasep.angle = 20
+    -- effect.chromasep.radius = 0--chromasep_base
+    effect.scanlines.thickness = 0.6
+    effect.scanlines.opacity = 0.2
+    effect.scanlines.width = 2
+    effect.crt.distortionFactor = {1.01,1.01}
+    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
+    effect.crt.feather = 0.01 --0.02
     
     -- Direct HUMP to automatically hook into love.update, love.draw, etc.
     Gamestate.registerEvents()
