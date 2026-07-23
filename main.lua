@@ -16,10 +16,12 @@ local effect
 
 function love.load()
 
+    
+
     debug = {
         invn = true,
     }
-
+    love.window.setFullscreen( true )
     love.window.setTitle("COUNTEROIDS")
 
     WINDOW_HEIGHT = love.graphics.getHeight()
@@ -62,11 +64,11 @@ function love.load()
     -- effect.glow.strength = 0
     -- effect.chromasep.angle = 20
     -- effect.chromasep.radius = 0--chromasep_base
---    effect.scanlines.thickness = 0.6
+    effect.scanlines.thickness = 0.6
     effect.scanlines.opacity = 0.2
-  --  effect.scanlines.width = 2
+    effect.scanlines.width = 2
     effect.crt.distortionFactor = {1.01,1.01}
---    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
+    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
     effect.crt.feather = 0.01 --0.02
     
     -- Start the sequence!
