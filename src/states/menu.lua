@@ -2,6 +2,7 @@ local themes = require "src.preferences.themes"
 local shakes = require "src.system.shakes"
 local sounds = require "src.system.sounds"
 local GameplayState = require "src.states.gameplay"
+local HerdingState = require "src.states.gameplay_herding"
 local state = require "src.state"
 
 local menu = {}
@@ -10,7 +11,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Play", "Options", "Exit"}
+    self.options = {"Play","Herding", "Options", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -126,6 +127,8 @@ function menu:executeChoice()
         love.event.quit()
     elseif choice == "Play" then
         state.switch(GameplayState)
+    elseif choice == "Herding" then
+        state.switch(HerdingState)
     elseif choice == "Options" then
         -- state.switch(OptionsMenuState)
     end
