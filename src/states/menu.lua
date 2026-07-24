@@ -6,6 +6,7 @@ local HerdingState = require "src.states.gameplay_herding"
 local CountdownState = require "src.states.gameplay_countdown"
 local SurvivalState = require "src.states.gameplay_survival"
 local BattleState = require "src.states.gameplay_battle"
+local BilliardsState = require "src.states.gameplay_billiards"
 local state = require "src.state"
 
 local menu = {}
@@ -14,7 +15,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Play","Countdown","Herding Cats", "Survival","Battle", "Options", "Exit"}
+    self.options = {"Play","Countdown","Herding Cats", "Survival","Battle", "Billiards" ,"Options", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -138,6 +139,8 @@ function menu:executeChoice()
         state.switch(SurvivalState)
     elseif choice == "Battle" then
         state.switch(BattleState)
+    elseif choice == "Billiards" then
+        state.switch(BilliardsState)
     elseif choice == "Options" then
         -- state.switch(OptionsMenuState)
     end
