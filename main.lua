@@ -1,5 +1,6 @@
 local moonshine = require "lib.moonshine"
 local state = require "src.state"
+require "src.system.soundManager"
 
 -- local shakes = require "src.system.shakes"
 
@@ -67,11 +68,13 @@ function love.load()
     -- effect.chromasep.radius = 0--chromasep_base
     effect.scanlines.thickness = 0.6
     effect.scanlines.opacity = 0.2
-    effect.scanlines.width = 2
-    effect.crt.distortionFactor = {1.01,1.01}
-    effect.crt.scaleFactor = {1,1}--{0.95,0.95}
-    effect.crt.feather = 0.01 --0.02
+    effect.scanlines.width = 3
+    effect.crt.distortionFactor = {1.02,1.02}
+    effect.crt.scaleFactor = {1.01,1.01}--{0.95,0.95}
+    effect.crt.feather = 0.03 --0.02
     
+    soundManager:load()
+
     -- Start the sequence!
     state.switch(MenuState)
 end

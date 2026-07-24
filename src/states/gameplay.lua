@@ -492,6 +492,7 @@ function gameplay:shoot()
 		radius = 2,
 		polarity = self:getPlayerPolarity(),
 	})
+	playShoot()
 end
 
 function gameplay:splitAsteroid(asteroid)
