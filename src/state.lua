@@ -5,10 +5,6 @@ local state = {
 function state.switch(nextState, ...)
     local previous = state.currentState
 
-    if previous and previous.leave then
-        previous:leave()
-    end
-
     state.currentState = nextState
 
     if state.currentState and state.currentState.enter then
