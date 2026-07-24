@@ -2,7 +2,7 @@ local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
 
-local gameplay = {}
+local gameplay_herding = {}
 local PLAYER_POLARITY = "primary"
 local SHIP_INVINCIBLE_DURATION = 2.5
 local SCORE_COUNT_SPEED = 220
@@ -106,7 +106,7 @@ local function resolveBodyCollision(a, b, bounce)
 	end
 end
 
-function gameplay:getArena()
+function gameplay_herding:getArena()
 	local shrinkAmount = 0.95
 	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
@@ -115,7 +115,7 @@ function gameplay:getArena()
 	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
 end
 
-function gameplay:getOrbitState()
+function gameplay_herding:getOrbitState()
 	local orbitPeriod = 6
 	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
 	local completedOrbits = math.floor(elapsed / orbitPeriod)
@@ -124,11 +124,11 @@ function gameplay:getOrbitState()
 	return completedOrbits, orbitAngle
 end
 
-function gameplay:getArenaPlayerColor()
+function gameplay_herding:getArenaPlayerColor()
 	return self:getColorForPolarity(self:getPlayerPolarity())
 end
 
-function gameplay:getArenaPolarity()
+function gameplay_herding:getArenaPolarity()
 	local completedOrbits = self:getOrbitState()
 	if completedOrbits % 2 == 0 then
 		return "secondary"
@@ -136,15 +136,15 @@ function gameplay:getArenaPolarity()
 	return "primary"
 end
 
-function gameplay:getArenaColor()
+function gameplay_herding:getArenaColor()
 	return self:getColorForPolarity(self:getArenaPolarity())
 end
 
-function gameplay:getPlayerPolarity()
+function gameplay_herding:getPlayerPolarity()
 	return PLAYER_POLARITY
 end
 
-function gameplay:getAsteroidPolarity(asteroid)
+function gameplay_herding:getAsteroidPolarity(asteroid)
 	local completedOrbits = self:getOrbitState()
 	local polarity = asteroid.polarity or "primary"
 	if completedOrbits % 2 == 1 then
@@ -156,14 +156,14 @@ function gameplay:getAsteroidPolarity(asteroid)
 	return polarity
 end
 
-function gameplay:getColorForPolarity(polarity)
+function gameplay_herding:getColorForPolarity(polarity)
 	if polarity == "secondary" then
 		return themes.current.secondary
 	end
 	return themes.current.primary
 end
 
-function gameplay:getAsteroidCountByPolarity(polarity)
+function gameplay_herding:getAsteroidCountByPolarity(polarity)
 	local count = 0
 	for _, asteroid in ipairs(self.asteroids) do
 		if self:getAsteroidPolarity(asteroid) == polarity then
@@ -173,7 +173,7 @@ function gameplay:getAsteroidCountByPolarity(polarity)
 	return count
 end
 
-function gameplay:spawnAsteroid(x, y, size, polarity)
+function gameplay_herding:spawnAsteroid(x, y, size, polarity)
 	local radiusBySize = {
 		large = 30,
 		medium = 18,
@@ -200,7 +200,7 @@ function gameplay:spawnAsteroid(x, y, size, polarity)
 	})
 end
 
-function gameplay:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
+function gameplay_herding:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 	local centerX, centerY, arenaRadius = self:getArena()
 	for _ = 1, 60 do
 		local angle = love.math.random() * math.pi * 2
@@ -227,7 +227,7 @@ function gameplay:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 	return centerX + math.cos(fallbackAngle) * (arenaRadius - 56), centerY + math.sin(fallbackAngle) * (arenaRadius - 56)
 end
 
-function gameplay:spawnWave(count)
+function gameplay_herding:spawnWave(count)
 	local centerX, centerY = self:getArena()
 	local shipX = (self.ship and self.ship.x) or centerX
 	local shipY = (self.ship and self.ship.y) or centerY
@@ -252,7 +252,7 @@ function gameplay:spawnWave(count)
 	end
 end
 
-function gameplay:resetRun()
+function gameplay_herding:resetRun()
 	local centerX, centerY = self:getArena()
 
 	self.ship = {
@@ -298,29 +298,29 @@ function gameplay:resetRun()
 	self:spawnWave(5)
 end
 
-function gameplay:addScore(points)
+function gameplay_herding:addScore(points)
 	self.score = self.score + points
 end
 
-function gameplay:getWaveScoreMultiplier()
+function gameplay_herding:getWaveScoreMultiplier()
 	return math.max(1, self.wave or 1)
 end
 
-function gameplay:getSurvivorBonusMultiplier()
+function gameplay_herding:getSurvivorBonusMultiplier()
 	return self:getWaveScoreMultiplier() * 2
 end
 
-function gameplay:addWaveScaledScore(basePoints)
+function gameplay_herding:addWaveScaledScore(basePoints)
 	local multiplier = self:getWaveScoreMultiplier()
 	self:addScore(basePoints * multiplier)
 end
 
-function gameplay:addSurvivorAsteroidScore(basePoints)
+function gameplay_herding:addSurvivorAsteroidScore(basePoints)
 	local multiplier = self:getSurvivorBonusMultiplier()
 	self:addScore(basePoints * multiplier)
 end
 
-function gameplay:updateDisplayedScore(dt)
+function gameplay_herding:updateDisplayedScore(dt)
 	local wasCounting = (self.displayedScore or 0) < self.score
 
 	if self.displayedScore >= self.score then
@@ -347,7 +347,7 @@ function gameplay:updateDisplayedScore(dt)
 	end
 end
 
-function gameplay:beginWaveClearSequence()
+function gameplay_herding:beginWaveClearSequence()
 	if self.waitingForNextWaveStart then
 		return
 	end
@@ -367,7 +367,7 @@ function gameplay:beginWaveClearSequence()
 	self.ship.vy = 0
 end
 
-function gameplay:updateWaveClearSequence(dt)
+function gameplay_herding:updateWaveClearSequence(dt)
 	if self.waveClearChars < #self.waveClearMessage then
 		self.waveClearTypeTimer = self.waveClearTypeTimer + dt
 		local typeInterval = 0.045
@@ -395,11 +395,11 @@ function gameplay:updateWaveClearSequence(dt)
 	self.waveClearCanContinue = true
 end
 
-function gameplay:isShipInvincible()
+function gameplay_herding:isShipInvincible()
 	return debug.invn or (self.shipInvincibleTimer or 0) > 0
 end
 
-function gameplay:spawnShipHitEffect(x, y)
+function gameplay_herding:spawnShipHitEffect(x, y)
 	local effect = {
 		x = x,
 		y = y,
@@ -426,7 +426,7 @@ function gameplay:spawnShipHitEffect(x, y)
 	table.insert(self.shipHitEffects, effect)
 end
 
-function gameplay:applyAsteroidHitRecoil(originX, originY)
+function gameplay_herding:applyAsteroidHitRecoil(originX, originY)
 	local recoilRadius = 600
 	for _, asteroid in ipairs(self.asteroids) do
 		local dx = asteroid.x - originX
@@ -452,7 +452,7 @@ function gameplay:applyAsteroidHitRecoil(originX, originY)
 	end
 end
 
-function gameplay:updateShipHitEffects(dt)
+function gameplay_herding:updateShipHitEffects(dt)
 	for i = #self.shipHitEffects, 1, -1 do
 		local effect = self.shipHitEffects[i]
 		effect.ttl = effect.ttl - dt
@@ -476,11 +476,11 @@ function gameplay:updateShipHitEffects(dt)
 	end
 end
 
-function gameplay:enter()
+function gameplay_herding:enter()
 	self:resetRun()
 end
 
-function gameplay:shoot()
+function gameplay_herding:shoot()
 	local ship = self.ship
 	local bulletSpeed = 420
 	table.insert(self.bullets, {
@@ -492,9 +492,10 @@ function gameplay:shoot()
 		radius = 2,
 		polarity = self:getPlayerPolarity(),
 	})
+	playShoot()
 end
 
-function gameplay:splitAsteroid(asteroid)
+function gameplay_herding:splitAsteroid(asteroid)
 	if asteroid.size == "large" then
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
@@ -508,7 +509,7 @@ function gameplay:splitAsteroid(asteroid)
 	end
 end
 
-function gameplay:applyAsteroidPolarityForces(dt)
+function gameplay_herding:applyAsteroidPolarityForces(dt)
 	local ship = self.ship
 	local playerPolarity = self:getPlayerPolarity()
 
@@ -545,7 +546,7 @@ function gameplay:applyAsteroidPolarityForces(dt)
 	end
 end
 
-function gameplay:updateShip(dt)
+function gameplay_herding:updateShip(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
 	local ship = self.ship
 	self.shipWallAccelLockTimer = math.max(0, (self.shipWallAccelLockTimer or 0) - dt)
@@ -604,7 +605,7 @@ function gameplay:updateShip(dt)
 	end
 end
 
-function gameplay:updateBullets(dt)
+function gameplay_herding:updateBullets(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
 
 	for i = #self.bullets, 1, -1 do
@@ -622,7 +623,7 @@ function gameplay:updateBullets(dt)
 	end
 end
 
-function gameplay:updateAsteroids(dt)
+function gameplay_herding:updateAsteroids(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
 	self:applyAsteroidPolarityForces(dt)
 
@@ -633,7 +634,7 @@ function gameplay:updateAsteroids(dt)
 	end
 end
 
-function gameplay:handleAsteroidAsteroidCollisions()
+function gameplay_herding:handleAsteroidAsteroidCollisions()
 	local splitSpeedThreshold = 190
 	local toRemove = {}
 	local toSplit = {}
@@ -689,7 +690,7 @@ function gameplay:handleAsteroidAsteroidCollisions()
 	end
 end
 
-function gameplay:handleBulletAsteroidCollisions()
+function gameplay_herding:handleBulletAsteroidCollisions()
 	for bi = #self.bullets, 1, -1 do
 		local bullet = self.bullets[bi]
 		local bulletHit = false
@@ -739,7 +740,7 @@ function gameplay:handleBulletAsteroidCollisions()
 	end
 end
 
-function gameplay:damagePlayer()
+function gameplay_herding:damagePlayer()
 	if self:isShipInvincible() then
 		return
 	end
@@ -765,7 +766,7 @@ function gameplay:damagePlayer()
 	end
 end
 
-function gameplay:handleShipBulletCollision()
+function gameplay_herding:handleShipBulletCollision()
 	if self:isShipInvincible() then
 		return
 	end
@@ -786,7 +787,7 @@ function gameplay:handleShipBulletCollision()
 	end
 end
 
-function gameplay:handleShipAsteroidCollision()
+function gameplay_herding:handleShipAsteroidCollision()
 	if self:isShipInvincible() then
 		return
 	end
@@ -807,7 +808,7 @@ function gameplay:handleShipAsteroidCollision()
 	end
 end
 
-function gameplay:startPopSequence()
+function gameplay_herding:startPopSequence()
 	local survivorMultiplier = self:getSurvivorBonusMultiplier()
 	self.isPoppingWave = true
 	self.popTimer = 0
@@ -815,7 +816,7 @@ function gameplay:startPopSequence()
 	self.shipWallAccelLockTimer = math.max(self.shipWallAccelLockTimer, 0.25)
 end
 
-function gameplay:getPopScoreForAsteroid(asteroid)
+function gameplay_herding:getPopScoreForAsteroid(asteroid)
 	if asteroid.size == "large" then
 		return 20
 	elseif asteroid.size == "medium" then
@@ -824,7 +825,7 @@ function gameplay:getPopScoreForAsteroid(asteroid)
 	return 60
 end
 
-function gameplay:updatePopSequence(dt)
+function gameplay_herding:updatePopSequence(dt)
 	self.popTimer = self.popTimer - dt
 	if self.popTimer > 0 then
 		return
@@ -842,14 +843,14 @@ function gameplay:updatePopSequence(dt)
 	end
 end
 
-function gameplay:startNextWave()
+function gameplay_herding:startNextWave()
 	self.wave = self.wave + 1
 	self.waitingForNextWaveStart = false
 	self.orbitStartTime = love.timer.getTime()
 	self:spawnWave(math.min(5 + self.wave, 12))
 end
 
-function gameplay:update(dt)
+function gameplay_herding:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
 	if escapeDown and not self.escapeWasDown then
 		sounds.get_points:stop()
@@ -920,7 +921,7 @@ function gameplay:update(dt)
 	end
 end
 
-function gameplay:drawShipHitEffects()
+function gameplay_herding:drawShipHitEffects()
 	for _, effect in ipairs(self.shipHitEffects) do
 		local t = math.max(0, effect.ttl / effect.duration)
 		local ringAlpha = 0.75 * t
@@ -937,7 +938,7 @@ function gameplay:drawShipHitEffects()
 	end
 end
 
-function gameplay:drawShip()
+function gameplay_herding:drawShip()
 	local isInvincible = (self.shipInvincibleTimer or 0) > 0
 	if isInvincible then
 		local blinkRate = 14
@@ -960,21 +961,21 @@ function gameplay:drawShip()
 	love.graphics.polygon("fill", noseX, noseY, leftX, leftY, rightX, rightY)
 end
 
-function gameplay:drawBullets()
+function gameplay_herding:drawBullets()
 	for _, bullet in ipairs(self.bullets) do
 		love.graphics.setColor(self:getColorForPolarity(bullet.polarity))
 		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
 	end
 end
 
-function gameplay:drawAsteroids()
+function gameplay_herding:drawAsteroids()
 	for _, asteroid in ipairs(self.asteroids) do
 		love.graphics.setColor(self:getColorForPolarity(self:getAsteroidPolarity(asteroid)))
 		love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
 	end
 end
 
-function gameplay:drawScoreWatermark()
+function gameplay_herding:drawScoreWatermark()
 	local centerX, centerY = self:getArena()
 	local label = tostring(self.displayedScore or 0)
 	if gameoverfont then
@@ -995,7 +996,7 @@ function gameplay:drawScoreWatermark()
 	love.graphics.pop()
 end
 
-function gameplay:drawHud()
+function gameplay_herding:drawHud()
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
@@ -1035,7 +1036,7 @@ function gameplay:drawHud()
 	end
 end
 
-function gameplay:drawArena()
+function gameplay_herding:drawArena()
 	local centerX, centerY, arenaRadius = self:getArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
@@ -1048,7 +1049,7 @@ function gameplay:drawArena()
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
 
-function gameplay:drawGameOver()
+function gameplay_herding:drawGameOver()
 	if not self.isGameOver then
 		return
 	end
@@ -1066,7 +1067,7 @@ function gameplay:drawGameOver()
 	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52, worldW, "center")
 end
 
-function gameplay:draw()
+function gameplay_herding:draw()
 	love.graphics.clear(themes.current.background)
 	self:drawArena()
 	self:drawScoreWatermark()
@@ -1079,4 +1080,4 @@ function gameplay:draw()
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
-return gameplay
+return gameplay_herding
