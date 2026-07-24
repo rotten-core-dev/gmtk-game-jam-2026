@@ -4,6 +4,7 @@ local sounds = require "src.system.sounds"
 local GameplayState = require "src.states.gameplay"
 local HerdingState = require "src.states.gameplay_herding"
 local CountdownState = require "src.states.gameplay_countdown"
+local SurvivalState = require "src.states.gameplay_survival"
 local state = require "src.state"
 
 local menu = {}
@@ -12,7 +13,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Play","Countdown","Herding", "Options", "Exit"}
+    self.options = {"Play","Countdown","Herding Cats", "Survival", "Options", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -130,8 +131,10 @@ function menu:executeChoice()
         state.switch(GameplayState)
     elseif choice == "Countdown" then
         state.switch(CountdownState)
-    elseif choice == "Herding" then
+    elseif choice == "Herding Cats" then
         state.switch(HerdingState)
+    elseif choice == "Survival" then
+        state.switch(SurvivalState)
     elseif choice == "Options" then
         -- state.switch(OptionsMenuState)
     end
