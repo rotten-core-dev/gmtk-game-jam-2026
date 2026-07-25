@@ -515,6 +515,26 @@ function gameplay:spawnParticles(x, y, quant)
     end
 end
 
+function gameplay:spawnShipParticles(x, y, velX,velY)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = 10
+	local rng = 3
+	local velX = velX * 10
+	local velY = velY * 10
+    for i = 1, quant do
+        vX = velX + love.math.random(-rng, rng)
+        vY = velY + love.math.random(-rng, rng)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = vX,  
+            velY = vY, 
+            time = 0.07,  
+        })
+    end
+end
+
 function gameplay:updateParticals(dt)
     if #particles < 1 then return end
 
@@ -612,6 +632,7 @@ function gameplay:updateShip(dt)
 	if inputX ~= 0 or inputY ~= 0 then
 		local mag = length(inputX, inputY)
 		inputX, inputY = inputX / mag, inputY / mag
+			self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
 	end
 
 	if self.shipWallAccelLockTimer <= 0 then
@@ -631,6 +652,10 @@ function gameplay:updateShip(dt)
 		ship.vx = ship.vx * k
 		ship.vy = ship.vy * k
 	end
+
+	-- if inputX ~= 0 or inputY ~= 0 then
+	-- 	self:spawnShipParticles(ship.x, ship.y, -ship.vx,-ship.vy)
+	-- end
 
 	ship.x = ship.x + ship.vx * dt
 	ship.y = ship.y + ship.vy * dt
@@ -1118,12 +1143,12 @@ function gameplay:draw()
 	self:drawArena()
 	self:drawScoreWatermark()
 	self:drawAsteroids()
+	self:drawParticals()
 	self:drawBullets()
 	self:drawShipHitEffects()
 	self:drawShip()
 	self:drawHud()
 	self:drawGameOver()
-	self:drawParticals()
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
