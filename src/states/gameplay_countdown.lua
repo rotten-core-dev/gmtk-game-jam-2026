@@ -1170,6 +1170,8 @@ function gameplay_countdown:drawWaveCountdown()
 		love.graphics.setFont(gameoverfont)
 	end
 	love.graphics.setColor(themes.current.secondary)
+	love.graphics.printf("CLEAR THE BALLS", 0, worldH * 0.23, worldW, "center")
+	love.graphics.printf("BEFORE THE COUNTDOWN ENDS", 0, worldH * 0.33, worldW, "center")
 	love.graphics.printf(tostring(value), 0, worldH * 0.43, worldW, "center")
 end
 
