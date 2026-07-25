@@ -71,9 +71,7 @@ function menu:update(dt)
 
     if hoveredOption then
         self.hoveredOption = hoveredOption
-        if self.selected ~= hoveredOption then
-            playSound(menuSound,menuSoundPitch)
-        end
+
         self.selected = hoveredOption
     else
         self.hoveredOption = nil
