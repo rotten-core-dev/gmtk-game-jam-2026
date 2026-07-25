@@ -41,6 +41,9 @@ function soundManager:load()
     sounds.boom = love.audio.newSource("lib/audio/sfx/boom.mp3", "static")
     sounds.bip = love.audio.newSource("lib/audio/sfx/bip.mp3", "static")
     sounds.shoot = love.audio.newSource("lib/audio/sfx/laserShoot.ogg", "static")
+    sounds.crash = love.audio.newSource("lib/audio/sfx/crash.ogg", "static")
+    sounds.crash2 = love.audio.newSource("lib/audio/sfx/crash2.ogg", "static")
+    sounds.crash3 = love.audio.newSource("lib/audio/sfx/crash3.ogg", "static")
           
     
     --menu--
@@ -71,6 +74,9 @@ function soundManager:load()
         sounds.bip:setVolume(masterVolume * effectVolume)
         sounds.boom:setVolume(masterVolume * effectVolume)
         sounds.shoot:setVolume(masterVolume * effectVolume)
+        sounds.crash:setVolume(masterVolume * effectVolume)
+        sounds.crash2:setVolume(masterVolume * effectVolume)
+        sounds.crash3:setVolume(masterVolume * effectVolume)
 
         --music--
         sounds.boop:setVolume(masterVolume * musicVolume)
@@ -96,10 +102,19 @@ function playShoot()
     s:play()
 end
 
-function playSound(soundName,pitchRng)
-    local soundName = soundName or sounds.menuError
-    local pitch = pitchRng * love.math.random() or 1
-    local s = soundName:clone()
+function playSound(soundName, pitchRng)
+    -- Use a string as the default, not the sound object itself
+    soundName = soundName or "menuError"  -- Pass the string key
+    
+    local pitch = (pitchRng or 1) * love.math.random()
+    
+    local sound = sounds[soundName]
+    if not sound then
+        error("Sound '" .. soundName .. "' not found")
+        return
+    end
+    
+    local s = sound:clone()
     s:setPitch(pitch)
     s:play()
 end

@@ -75,6 +75,7 @@ function love.load()
     
     soundManager:load()
 
+    
     -- Start the sequence!
     state.switch(MenuState)
 end

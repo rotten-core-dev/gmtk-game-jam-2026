@@ -2,6 +2,8 @@ local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
 
+require "src.system.soundManager"
+
 local gameplay = {}
 local PLAYER_POLARITY = "primary"
 local SHIP_INVINCIBLE_DURATION = 2.5
@@ -826,8 +828,13 @@ function gameplay:damagePlayer()
 	self:spawnShipHitEffect(hitX, hitY)
 	self:applyAsteroidHitRecoil(hitX, hitY)
 
-	sounds.crash:stop()
-	sounds.crash:play()
+	-- sounds.crash:stop()
+	-- sounds.crash:play()
+	playSound("roidSmash")
+	playSound("crash")
+	playSound("crash2")
+	playSound("crash3")
+
 	self:spawnParticles(hitX, hitY,50,100)
 
 	self.lives = self.lives - 1
