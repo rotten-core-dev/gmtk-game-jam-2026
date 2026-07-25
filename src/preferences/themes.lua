@@ -8,27 +8,35 @@ themes.list = {
         primary    = { 0, 1, 0, 1 },
         secondary  = { 0, 0.5, 0, 1 },
         background = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "MONOCHROME",
         unlocked    = true,
         primary     = { 0, 0, 0, 1 },
         secondary   = { 0.2, 0.2, 0.2, 1 },
-        background  = { 0.6, 0.6, 0.6, 1 }
+        background  = { 0.6, 0.6, 0.6, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "NEON NIGHT",
         unlocked    = true,
         primary     = { 0.8, 0, 0.8, 1 },
         secondary   = { 0, 1, 1, 1 },
-        background  = { 0.05, 0.05, 0.05, 1 }
+        background  = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "SHADES OF BLUE",
         unlocked    = true,
         primary     = { 0, 0, 1, 1 },
         secondary   = { 0, 1, 1, 1 },
-        background  = { 0.8, 0.8, 1, 1 }
+        background  = { 0.8, 0.8, 1, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "SPORTS BALL",
@@ -36,27 +44,35 @@ themes.list = {
         primary     = { 1, 1, 1, 1 },
         secondary   = { 0.2, 0.2, 1, 0.8 },
         background  = { 0.1, 0.1, 0.1, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "THWUMP",
         unlocked    = true,
         primary     = { 1, 1, 1, 1 },
         secondary   = { 1, 0, 0, 1 },
-        background  = { 0.05, 0.05, 0.05, 1 }
+        background  = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
     {
         name        = "TRON",
         unlocked    = true,
         primary     = { 0.49, 0.99, 0.99, 1},
         secondary   = { 0.95, 0.69, 0.18, 1},
-        background  = { 0.05, 0.05, 0.05, 1 }
+        background  = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "BLUE",
+        secondary_name = "ORANGE",
     },
     {
         name        = "YRB",
         unlocked    = true,
         primary     = { 1, 1, 0, 1},
         secondary   = { 1, 0, 0, 1 },
-        background  = { 0.05, 0.05, 0.05, 1 }
+        background  = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "",
+        secondary_name = "",
     },
 
 }
