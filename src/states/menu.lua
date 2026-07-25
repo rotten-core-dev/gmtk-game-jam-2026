@@ -47,12 +47,15 @@ function menu:update(dt)
 
     local mouseX, mouseY = love.mouse.getPosition()
     local hoveredOption = self:getOptionAtPosition(mouseX, mouseY)
+    local menuSound = "menuError"
+    local menuSoundPitch = 0.99
 
     
     if hoveredOption then
+        if self.selected ~= hoveredOption then
+            playSound(menuSound,menuSoundPitch)
+        end
         self.selected = hoveredOption
-    else
-        self.selected = nil
     end
 
     local mouseIsDown = love.mouse.isDown(1)
@@ -67,6 +70,7 @@ function menu:update(dt)
         if downIsDown and not self.downWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected + 1
+            playSound(menuSound,menuSoundPitch)
             if self.selected > #self.options then self.selected = 1 end
         end
 
@@ -74,11 +78,13 @@ function menu:update(dt)
         if upIsDown and not self.upWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected - 1
+            playSound(menuSound,menuSoundPitch)
             if self.selected < 1 then self.selected = #self.options end
         end
 
         local selectIsDown = love.keyboard.isDown("return") or love.keyboard.isDown("space")
         if selectIsDown and not self.selectWasDown then
+            playSound(menuSound,menuSoundPitch)
             self:executeChoice()
         end
 

@@ -105,8 +105,10 @@ end
 function playSound(soundName, pitchRng)
     -- Use a string as the default, not the sound object itself
     soundName = soundName or "menuError"  -- Pass the string key
-    
-    local pitch = (pitchRng or 1) * love.math.random()
+    local pitch = 1
+    if pitchRng < 1 then
+        pitch = love.math.random(1 * pitchRng,1) -- this is not right
+    end
     
     local sound = sounds[soundName]
     if not sound then
