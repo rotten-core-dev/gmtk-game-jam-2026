@@ -467,6 +467,75 @@ function gameplay_battle:shoot(owner)
 	end
 end
 
+
+function gameplay_battle:spawnParticles(x, y, time, quant)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = quant or 10
+	local speed = 12
+	local time = time or 10 --0.5
+	local t = time + love.math.random(-0.1,0.1)
+    for i = 1, quant do
+        local velX = love.math.random(-speed, speed)
+        local velY = love.math.random(-speed, speed)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = velX,  
+            velY = velY, 
+            time = time,  
+        })
+    end
+end
+
+function gameplay_battle:spawnShipParticles(x, y, velX,velY)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = 3
+	local rng = 3
+	local velX = velX * 10
+	local velY = velY * 10
+    for i = 1, quant do
+        vX = velX + love.math.random(-rng, rng)
+        vY = velY + love.math.random(-rng, rng)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = vX,  
+            velY = vY, 
+            time = 0.07,  
+        })
+    end
+end
+
+function gameplay_battle:updateParticals(dt)
+    if #particles < 1 then return end
+
+    for i = #particles, 1, -1 do
+        local cp = particles[i]
+		local rng = love.math.random(0.97, 0.99)
+        if cp.time > 0 then
+            cp.time = cp.time - dt
+            cp.x = cp.x + cp.velX
+            cp.y = cp.y + cp.velY
+
+			cp.velX = cp.velX * rng
+			cp.velY = cp.velY * rng
+        else
+            table.remove(particles, i)
+        end
+    end
+end
+
+function gameplay_battle:drawParticals()
+	if #particles < 1 then return end
+
+	for i = 1,#particles do
+		local cp = particles[i]
+		love.graphics.line(cp.x,cp.y,cp.x +cp.velX,cp.y +cp.velY)
+	end
+end
+
 function gameplay_battle:updatePlayerShip(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
 	local ship = self.ship
@@ -490,6 +559,8 @@ function gameplay_battle:updatePlayerShip(dt)
 		local mag = length(inputX, inputY)
 		inputX = inputX / mag
 		inputY = inputY / mag
+		self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
+		playJetsSound()
 	end
 
 	if self.shipWallAccelLockTimer <= 0 then
@@ -574,6 +645,8 @@ function gameplay_battle:updateEnemyShip(dt)
 	if inputMag > 0.001 then
 		inputX = inputX / inputMag
 		inputY = inputY / inputMag
+		self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
+		playJetsSound()
 	else
 		inputX = 0
 		inputY = 0
@@ -711,6 +784,7 @@ function gameplay_battle:handleBulletCollisions()
 					table.remove(self.bullets, bi)
 					sounds.hit_foe:play()
 					bulletRemoved = true
+					self:spawnParticles(asteroid.x,asteroid.y)
 					break
 				end
 			end
@@ -753,6 +827,7 @@ function gameplay_battle:handleFloatingAsteroidInteractions()
 						self:damageOrbitAsteroid(orbiting, nx, ny)
 						self:damageFloatingAsteroid(floating, -nx, -ny)
 						sounds.hit_foe:play()
+						-- self:spawnParticles(asteroid.x,asteroid.y)
 						handled = true
 						break
 					end
@@ -849,6 +924,7 @@ function gameplay_battle:update(dt)
 	self:handleBulletCollisions()
 	self:handleFloatingAsteroidInteractions()
 	self:handleShipAsteroidCollisions()
+	self:updateParticals(dt)
 end
 
 function gameplay_battle:drawShipHitEffects()
@@ -954,6 +1030,7 @@ function gameplay_battle:draw()
 	love.graphics.clear(themes.current.background)
 	self:drawArena()
 	self:drawAsteroids()
+	self:drawParticals()
 	self:drawBullets()
 	self:drawShipHitEffects()
 	self:drawShipBody(self.ship)
