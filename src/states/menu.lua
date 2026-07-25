@@ -102,13 +102,16 @@ function menu:draw()
     
     for i, option in ipairs(self.options) do
         local y = startY + (i * spacing)
+        local w = menulargefont:getWidth("> " .. option) or 160
         self.optionBounds[i] = {
             x = 300,
-            y = y - 8,
-            w = 160,
-            h = 28,
+            y = y - 6,
+            w = w,
+            h = 28 + 6,
         }
 
+        local pp = self.optionBounds[i]
+        -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
         if i == self.selected then
             -- Highlighted item: Larger font size (or simulated styling)
             love.graphics.setFont(menulargefont)
