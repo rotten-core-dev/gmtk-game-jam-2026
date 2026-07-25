@@ -66,9 +66,14 @@ function menu:update(dt)
 
     local mouseX, mouseY = love.mouse.getPosition()
     local hoveredOption = self:getOptionAtPosition(mouseX, mouseY)
+    local menuSound = "menuError"
+    local menuSoundPitch = 0.99
 
     if hoveredOption then
         self.hoveredOption = hoveredOption
+        if self.selected ~= hoveredOption then
+            playSound(menuSound,menuSoundPitch)
+        end
         self.selected = hoveredOption
     else
         self.hoveredOption = nil
@@ -87,27 +92,30 @@ function menu:update(dt)
 
     self.mouseWasDown = mouseIsDown
 
-        local downIsDown = love.keyboard.isDown("down")
+        local downIsDown = love.keyboard.isDown("down") or love.keyboard.isDown("s")
         if downIsDown and not self.downWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected + 1
             if self.selected > #self.options then self.selected = 1 end
             self:setThemeForOption(self.options[self.selected])
             self.previewedOption = self.selected
+             playSound(menuSound,menuSoundPitch)
         end
 
-        local upIsDown = love.keyboard.isDown("up")
+        local upIsDown = love.keyboard.isDown("up") or love.keyboard.isDown("w")
         if upIsDown and not self.upWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected - 1
             if self.selected < 1 then self.selected = #self.options end
             self:setThemeForOption(self.options[self.selected])
             self.previewedOption = self.selected
+             playSound(menuSound,menuSoundPitch)
         end
 
         local selectIsDown = love.keyboard.isDown("return") or love.keyboard.isDown("space")
         if selectIsDown and not self.selectWasDown then
             self:executeChoice()
+             playSound(menuSound,menuSoundPitch)
         end
 
         self.downWasDown = downIsDown
@@ -134,12 +142,19 @@ function menu:draw()
     
     for i, option in ipairs(self.options) do
         local y = startY + (i * spacing)
+        local w = menulargefont:getWidth("> " .. option) or 160
         self.optionBounds[i] = {
             x = 300,
             y = y - 8,
             w = 160,
             h = 28,
+            y = y - 6,
+            w = w,
+            h = 28 + 6,
         }
+
+        local pp = self.optionBounds[i]
+        -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
 
         if i == self.selected then
             -- Highlighted item: Larger font size (or simulated styling)
