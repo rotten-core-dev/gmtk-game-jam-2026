@@ -104,6 +104,8 @@ function menu:draw()
     self.optionBounds = {}
 
     love.graphics.setFont(titlefont)
+    love.graphics.setColor(themes.current.secondary)
+    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2-60), WINDOW_HEIGHT/2-240+8)
     love.graphics.setColor(themes.current.primary)
     love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2-60), WINDOW_HEIGHT/2-240)
     
