@@ -11,6 +11,8 @@ local SURVIVOR_POP_INTERVAL_BASE = 0.55
 local SURVIVOR_POP_INTERVAL_PER_MULT = 0.12
 local SURVIVOR_POP_INTERVAL_MAX = 1.35
 
+particles = {}
+
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
 end
@@ -495,6 +497,48 @@ function gameplay:shoot()
 	playShoot()
 end
 
+function gameplay:spawnParticles(x, y, quant)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = quant or 10
+	local speed = 12
+    for i = 1, quant do
+        local velX = love.math.random(-speed, speed)
+        local velY = love.math.random(-speed, speed)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = velX,  
+            velY = velY, 
+            time = 0.5,  
+        })
+    end
+end
+
+function gameplay:updateParticals(dt)
+    if #particles < 1 then return end
+
+    for i = #particles, 1, -1 do
+        local cp = particles[i]
+        if cp.time > 0 then
+            cp.time = cp.time - dt
+            cp.x = cp.x + cp.velX
+            cp.y = cp.y + cp.velY
+        else
+            table.remove(particles, i)
+        end
+    end
+end
+
+function gameplay:drawParticals()
+	if #particles < 1 then return end
+
+	for i = 1,#particles do
+		local cp = particles[i]
+		love.graphics.line(cp.x,cp.y,cp.x +cp.velX,cp.y +cp.velY)
+	end
+end
+
 function gameplay:splitAsteroid(asteroid)
 	if asteroid.size == "large" then
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
@@ -706,6 +750,7 @@ function gameplay:handleBulletAsteroidCollisions()
 					self:splitAsteroid(asteroid)
 					bulletHit = true
 					sounds.hit_foe:play()
+					self:spawnParticles(asteroid.x,asteroid.y)
 					break
 				end
 
@@ -906,6 +951,7 @@ function gameplay:update(dt)
 	self:handleBulletAsteroidCollisions()
 	self:handleShipBulletCollision()
 	self:handleShipAsteroidCollision()
+	self:updateParticals(dt)
 
 	if not self.isGameOver then
 		local yellowAsteroids = self:getAsteroidCountByPolarity("secondary")
@@ -1077,6 +1123,7 @@ function gameplay:draw()
 	self:drawShip()
 	self:drawHud()
 	self:drawGameOver()
+	self:drawParticals()
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
