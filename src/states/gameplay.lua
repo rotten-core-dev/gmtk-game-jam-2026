@@ -497,11 +497,13 @@ function gameplay:shoot()
 	playShoot()
 end
 
-function gameplay:spawnParticles(x, y, quant)
+function gameplay:spawnParticles(x, y, time, quant)
     local x = x or WINDOW_WIDTH/2
     local y = y or WINDOW_HEIGHT/2
     local quant = quant or 10
 	local speed = 12
+	local time = time or 10 --0.5
+	local t = time + love.math.random(-0.1,0.1)
     for i = 1, quant do
         local velX = love.math.random(-speed, speed)
         local velY = love.math.random(-speed, speed)
@@ -510,7 +512,7 @@ function gameplay:spawnParticles(x, y, quant)
             y = y,
             velX = velX,  
             velY = velY, 
-            time = 0.5,  
+            time = time,  
         })
     end
 end
@@ -518,7 +520,7 @@ end
 function gameplay:spawnShipParticles(x, y, velX,velY)
     local x = x or WINDOW_WIDTH/2
     local y = y or WINDOW_HEIGHT/2
-    local quant = 10
+    local quant = 3
 	local rng = 3
 	local velX = velX * 10
 	local velY = velY * 10
@@ -540,10 +542,14 @@ function gameplay:updateParticals(dt)
 
     for i = #particles, 1, -1 do
         local cp = particles[i]
+		local rng = love.math.random(0.97, 0.99)
         if cp.time > 0 then
             cp.time = cp.time - dt
             cp.x = cp.x + cp.velX
             cp.y = cp.y + cp.velY
+
+			cp.velX = cp.velX * rng
+			cp.velY = cp.velY * rng
         else
             table.remove(particles, i)
         end
@@ -822,6 +828,8 @@ function gameplay:damagePlayer()
 
 	sounds.crash:stop()
 	sounds.crash:play()
+	self:spawnParticles(hitX, hitY,50,100)
+
 	self.lives = self.lives - 1
 	local centerX, centerY = self:getArena()
 	self.ship.x = centerX
