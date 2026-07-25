@@ -10,8 +10,8 @@ local ROUND_WIN_TARGET = 2
 local ORBIT_ASTEROIDS_PER_SHIP = 3
 local ORBIT_RADIUS = 72
 local ORBIT_SPEED = 1.45
-local PLAYER_FIRE_COOLDOWN = 0.5
-local AI_FIRE_COOLDOWN = 0.5
+local PLAYER_FIRE_COOLDOWN = 0.75
+local AI_FIRE_COOLDOWN = 0.75
 local AI_STRAFE_SPEED = 1.4
 local AI_BULLET_AVOID_RADIUS = 170
 
@@ -138,7 +138,7 @@ local function getNextAsteroidSize(size)
 end
 
 function gameplay_battle:getArena()
-	local shrinkAmount = 0.95
+	local shrinkAmount = 0.9
 	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
@@ -154,6 +154,22 @@ function gameplay_battle:getOrbitState()
 	local orbitAngle = -math.pi * 0.5 + orbitProgress * math.pi * 2
 	return completedOrbits, orbitAngle
 end
+
+function gameplay_battle:getArenaPolarity()
+	local completedOrbits = self:getOrbitState()
+	if completedOrbits % 2 == 0 then
+		return "secondary"
+	end
+	return "primary"
+end
+
+function gameplay_battle:getArenaColor()
+	if self:getArenaPolarity() == "secondary" then
+		return themes.current.secondary
+	end
+	return themes.current.primary
+end
+
 
 function gameplay_battle:getColorForOwner(owner)
 	if owner == ENEMY_OWNER then
@@ -928,7 +944,7 @@ function gameplay_battle:drawArena()
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
 	local orbiterRadius = 8
 
-	love.graphics.setColor(themes.current.secondary)
+	love.graphics.setColor(self:getArenaColor())
 	love.graphics.setLineWidth(4)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
