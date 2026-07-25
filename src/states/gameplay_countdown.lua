@@ -2,6 +2,8 @@ local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
 
+require "src.system.soundManager"
+
 local gameplay_countdown = {}
 local PLAYER_POLARITY = "primary"
 local SHIP_INVINCIBLE_DURATION = 2.5
@@ -13,6 +15,8 @@ local SURVIVOR_POP_INTERVAL_MAX = 1.35
 local MAX_WAVE_ORBITS = 5
 local MAX_WAVES = 3
 local PRE_WAVE_COUNTDOWN_SECONDS = 3
+
+particles = {}
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -620,6 +624,74 @@ function gameplay_countdown:shoot()
 	playShoot()
 end
 
+function gameplay_countdown:spawnParticles(x, y, time, quant)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = quant or 10
+	local speed = 12
+	local time = time or 10 --0.5
+	local t = time + love.math.random(-0.1,0.1)
+    for i = 1, quant do
+        local velX = love.math.random(-speed, speed)
+        local velY = love.math.random(-speed, speed)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = velX,  
+            velY = velY, 
+            time = time,  
+        })
+    end
+end
+
+function gameplay_countdown:spawnShipParticles(x, y, velX,velY)
+    local x = x or WINDOW_WIDTH/2
+    local y = y or WINDOW_HEIGHT/2
+    local quant = 3
+	local rng = 3
+	local velX = velX * 10
+	local velY = velY * 10
+    for i = 1, quant do
+        vX = velX + love.math.random(-rng, rng)
+        vY = velY + love.math.random(-rng, rng)
+        table.insert(particles, {
+            x = x,
+            y = y,
+            velX = vX,  
+            velY = vY, 
+            time = 0.07,  
+        })
+    end
+end
+
+function gameplay_countdown:updateParticals(dt)
+    if #particles < 1 then return end
+
+    for i = #particles, 1, -1 do
+        local cp = particles[i]
+		local rng = love.math.random(0.97, 0.99)
+        if cp.time > 0 then
+            cp.time = cp.time - dt
+            cp.x = cp.x + cp.velX
+            cp.y = cp.y + cp.velY
+
+			cp.velX = cp.velX * rng
+			cp.velY = cp.velY * rng
+        else
+            table.remove(particles, i)
+        end
+    end
+end
+
+function gameplay_countdown:drawParticals()
+	if #particles < 1 then return end
+
+	for i = 1,#particles do
+		local cp = particles[i]
+		love.graphics.line(cp.x,cp.y,cp.x +cp.velX,cp.y +cp.velY)
+	end
+end
+
 function gameplay_countdown:splitAsteroid(asteroid)
 	if asteroid.size == "large" then
 		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
@@ -693,6 +765,8 @@ function gameplay_countdown:updateShip(dt)
 	if inputX ~= 0 or inputY ~= 0 then
 		local mag = length(inputX, inputY)
 		inputX, inputY = inputX / mag, inputY / mag
+		self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
+		playJetsSound()
 	end
 
 	if self.shipWallAccelLockTimer <= 0 then
@@ -831,6 +905,7 @@ function gameplay_countdown:handleBulletAsteroidCollisions()
 					self:splitAsteroid(asteroid)
 					bulletHit = true
 					sounds.hit_foe:play()
+					self:spawnParticles(asteroid.x,asteroid.y)
 					break
 				end
 
@@ -875,8 +950,16 @@ function gameplay_countdown:damagePlayer()
 	self:spawnShipHitEffect(hitX, hitY)
 	self:applyAsteroidHitRecoil(hitX, hitY)
 
-	sounds.crash:stop()
-	sounds.crash:play()
+	--sounds.crash:stop()
+	--sounds.crash:play()
+
+	playSound("roidSmash")
+	playSound("crash")
+	playSound("crash2")
+	playSound("crash3")
+
+	self:spawnParticles(hitX, hitY,50,100)
+
 	self.lives = self.lives - 1
 	local centerX, centerY = self:getArena()
 	self.ship.x = centerX
@@ -1009,6 +1092,7 @@ function gameplay_countdown:update(dt)
 	self:handleBulletAsteroidCollisions()
 	self:handleShipBulletCollision()
 	self:handleShipAsteroidCollision()
+	self:updateParticals(dt)
 
 	if not self.isGameOver then
 		local completedOrbits = self:getCompletedOrbitsThisWave()
@@ -1234,6 +1318,7 @@ function gameplay_countdown:draw()
 	self:drawArena()
 	self:drawScoreWatermark()
 	self:drawAsteroids()
+	self:drawParticals()
 	self:drawBullets()
 	self:drawShipHitEffects()
 	self:drawShip()
