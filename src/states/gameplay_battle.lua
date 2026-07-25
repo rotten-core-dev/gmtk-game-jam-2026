@@ -10,9 +10,10 @@ local ROUND_WIN_TARGET = 2
 local ORBIT_ASTEROIDS_PER_SHIP = 3
 local ORBIT_RADIUS = 72
 local ORBIT_SPEED = 1.45
-local PLAYER_FIRE_COOLDOWN = 0.27
-local AI_FIRE_COOLDOWN = 0.8
+local PLAYER_FIRE_COOLDOWN = 0.5
+local AI_FIRE_COOLDOWN = 0.5
 local AI_STRAFE_SPEED = 1.4
+local AI_BULLET_AVOID_RADIUS = 170
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -146,7 +147,7 @@ function gameplay_battle:getArena()
 end
 
 function gameplay_battle:getOrbitState()
-	local orbitPeriod = 6
+	local orbitPeriod = 3
 	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
 	local completedOrbits = math.floor(elapsed / orbitPeriod)
 	local orbitProgress = (elapsed % orbitPeriod) / orbitPeriod
@@ -515,15 +516,51 @@ function gameplay_battle:updateEnemyShip(dt)
 	local target = self:getCombatTargetForOwner(ENEMY_OWNER)
 	ship.angle = angleTo(target.x - ship.x, target.y - ship.y)
 
-	local desiredX = centerX + arenaRadius * 0.42
-	local desiredY = centerY + math.sin(self.orbitClock * AI_STRAFE_SPEED) * arenaRadius * 0.35
+	local playerOrbitCount = self:getOrbitAsteroidCount(PLAYER_OWNER)
+	local enemyOrbitCount = self:getOrbitAsteroidCount(ENEMY_OWNER)
+	local lateralBias = enemyOrbitCount > playerOrbitCount and 0.52 or 0.34
+	local desiredX = centerX + arenaRadius * lateralBias
+	local desiredY = target.y + math.sin(self.orbitClock * AI_STRAFE_SPEED) * arenaRadius * 0.18
+	local inputX = 0
+	local inputY = 0
+
 	local dx = desiredX - ship.x
 	local dy = desiredY - ship.y
 	local dist = length(dx, dy)
-	local inputX, inputY = 0, 0
 	if dist > 8 then
-		inputX = dx / dist
-		inputY = dy / dist
+		inputX = inputX + dx / dist
+		inputY = inputY + dy / dist
+	end
+
+	local targetDx = target.x - ship.x
+	local targetDy = target.y - ship.y
+	local targetDist = length(targetDx, targetDy)
+	if targetDist > 0.001 then
+		local orbitPressure = playerOrbitCount == 0 and 0.55 or 0.3
+		inputX = inputX + (targetDx / targetDist) * orbitPressure
+		inputY = inputY + (targetDy / targetDist) * orbitPressure
+	end
+
+	for _, bullet in ipairs(self.bullets) do
+		if bullet.owner == PLAYER_OWNER then
+			local avoidDx = ship.x - bullet.x
+			local avoidDy = ship.y - bullet.y
+			local bulletDist = length(avoidDx, avoidDy)
+			if bulletDist > 0.001 and bulletDist < AI_BULLET_AVOID_RADIUS then
+				local threat = 1 - (bulletDist / AI_BULLET_AVOID_RADIUS)
+				inputX = inputX + (avoidDx / bulletDist) * threat * 2.2
+				inputY = inputY + (avoidDy / bulletDist) * threat * 2.2
+			end
+		end
+	end
+
+	local inputMag = length(inputX, inputY)
+	if inputMag > 0.001 then
+		inputX = inputX / inputMag
+		inputY = inputY / inputMag
+	else
+		inputX = 0
+		inputY = 0
 	end
 
 	if self.enemyWallAccelLockTimer <= 0 then
