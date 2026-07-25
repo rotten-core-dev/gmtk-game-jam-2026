@@ -15,8 +15,8 @@ local themeByOption = {
     ["Countdown"] = "TRON",
     ["Herding Cats"] = "PASTELS",
     ["Survival"] = "THWUMP",
-    ["Dog Fight"] = "YRB",
-    ["Billiards"] = "SPORTS BALL",
+    ["Dog Fight"] = "SPORTS BALL",
+    ["Billiards"] = "YRB",
     ["Options"] = "HACKER",
     ["Exit"] = "MONOCHROME",
 }
