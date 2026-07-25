@@ -30,6 +30,15 @@ themes.list = {
         secondary_name = "",
     },
     {
+        name        = "PASTELS",
+        unlocked    = true,
+        primary     = { 1.0, 0.750, 0.850, 1 },
+        secondary   = { 0.650, 0.500, 0.950, 1 },
+        background  = { 0.05, 0.05, 0.05, 1 },
+        primary_name = "PINK",
+        secondary_name = "PURPLE",
+    },
+    {
         name        = "SHADES OF BLUE",
         unlocked    = true,
         primary     = { 0, 0, 1, 1 },
@@ -76,7 +85,7 @@ themes.list = {
     },
 
 }
-themes.current = themes.list[7]
+themes.current = themes.list[8]
 
 function themes.set(index)
     themes.current = themes.list[index]
@@ -85,6 +94,19 @@ end
 function themes.get()
     return themes.current
 end
+
+function themes.setByName(themeName)
+    for _, theme in ipairs(themes.list) do
+        if theme.name == themeName then
+            themes.current = theme
+            return theme
+        end
+    end
+
+    return nil
+end
+
+themes.setThemeByName = themes.setByName
 
 function themes.getByName(name)
     for _, theme in ipairs(themes.list) do

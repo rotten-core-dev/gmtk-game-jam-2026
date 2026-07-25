@@ -11,7 +11,18 @@ local SCORE_COUNT_SPEED = 220
 local SCORE_COUNT_SPEED_EXTRA = 6
 local SURVIVOR_POP_INTERVAL_BASE = 0.55
 local SURVIVOR_POP_INTERVAL_PER_MULT = 0.12
-local SURVIVOR_POP_INTERVAL_MAX = 1.35
+local SURVIVOR_POP_INTERVAL_MAX = 0.75
+local MAX_WAVE_ORBITS = 5
+local MAX_WAVES = 3
+local PRE_WAVE_COUNTDOWN_SECONDS = 3
+local BLACK_HOLE_RADIUS = 34
+local BLACK_HOLE_CAPTURE_RADIUS = 30
+local BLACK_HOLE_GRAVITY = 300
+local BLACK_HOLE_SWIRL = 220
+local TRACTOR_BEAM_RANGE = 230
+local TRACTOR_BEAM_HALF_ANGLE = math.rad(18)
+local TRACTOR_BEAM_PULL = 12
+local SHIP_ASTEROID_BOUNCE = 0.35
 
 particles = {}
 
@@ -115,8 +126,13 @@ function gameplay_herding:getArena()
 	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
-	local arenaLineWidth = 4
-	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
+	local arenaSizeAdjustment = 10
+	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaSizeAdjustment) * shrinkScale
+end
+
+function gameplay_herding:getBlackHole()
+	local centerX, centerY, arenaRadius = self:getArena()
+	return centerX, centerY, math.min(BLACK_HOLE_RADIUS, arenaRadius * 0.18)
 end
 
 function gameplay_herding:getOrbitState()
@@ -237,11 +253,9 @@ function gameplay_herding:spawnWave(count)
 	local shipY = (self.ship and self.ship.y) or centerY
 	local minShipDistance = (self.ship and self.ship.radius or 12) + 30 + 40
 	local asteroidPolarities = {}
-	local primaryCount = math.floor(count / 2)
-	for _ = 1, primaryCount do
+	local pairCount = math.max(1, math.ceil(count / 2))
+	for _ = 1, pairCount do
 		table.insert(asteroidPolarities, "primary")
-	end
-	for _ = primaryCount + 1, count do
 		table.insert(asteroidPolarities, "secondary")
 	end
 	for i = #asteroidPolarities, 2, -1 do
@@ -249,8 +263,8 @@ function gameplay_herding:spawnWave(count)
 		asteroidPolarities[i], asteroidPolarities[swapIndex] = asteroidPolarities[swapIndex], asteroidPolarities[i]
 	end
 
-	for _ = 1, count do
-		local polarity = asteroidPolarities[_]
+	for i = 1, #asteroidPolarities do
+		local polarity = asteroidPolarities[i]
 		local x, y = self:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 		self:spawnAsteroid(x, y, "large", polarity)
 	end
@@ -283,10 +297,7 @@ function gameplay_herding:resetRun()
 	self.fireCooldown = 0
 	self.shipWallAccelLockTimer = 0
 	self.shipInvincibleTimer = 0
-	self.isPoppingWave = false
 	self.waitingForNextWaveStart = false
-	self.popTimer = 0
-	self.popInterval = 0.5
 	self.shipHitEffects = {}
 	self.waveClearMessage = ""
 	self.waveClearChars = 0
@@ -294,12 +305,53 @@ function gameplay_herding:resetRun()
 	self.waveClearScoreDelay = 0
 	self.waveClearPromptDelay = 0
 	self.waveClearCanContinue = false
+	self.waveCompletionType = nil
+	self.waveStartScore = 0
+	self.wavePreResolutionScore = 0
+	self.wavePendingAdjustment = 0
+	self.waveClearPhase = ""
+	self.wavePhaseTimer = 0
+	self.wavePopDirection = 1
+	self.wavePopInterval = 0.5
+	self.wavePopTimer = 0
+	self.waveAdjustmentApplied = false
+	self.waveCountdownActive = false
+	self.waveCountdownTimer = 0
+	self.roundComplete = false
+	self.blackHolePulse = 0
+	self.tractorBeamActive = false
+	self.tractoredAsteroid = nil
+	self.tractorHoldDistance = 0
 	self.scoreCountSoundPlaying = false
 	sounds.get_points:setLooping(true)
 	sounds.get_points:stop()
-	self.orbitStartTime = love.timer.getTime()
+	self.orbitStartTime = nil
 
 	self:spawnWave(5)
+	self.waveStartScore = self.score
+	self:startWaveCountdown()
+end
+
+function gameplay_herding:startWaveCountdown()
+	self.waveCountdownActive = true
+	self.waveCountdownTimer = PRE_WAVE_COUNTDOWN_SECONDS
+	self.blackHolePulse = 0
+	self.tractorBeamActive = false
+	self.tractoredAsteroid = nil
+	self.tractorHoldDistance = 0
+	self.orbitStartTime = nil
+	self.bullets = {}
+	self.ship.vx = 0
+	self.ship.vy = 0
+end
+
+function gameplay_herding:getCompletedOrbitsThisWave()
+	local completedOrbits = self:getOrbitState()
+	return completedOrbits
+end
+
+function gameplay_herding:getOrbitsRemainingThisWave()
+	return math.max(0, MAX_WAVE_ORBITS - self:getCompletedOrbitsThisWave())
 end
 
 function gameplay_herding:addScore(points)
@@ -325,18 +377,23 @@ function gameplay_herding:addSurvivorAsteroidScore(basePoints)
 end
 
 function gameplay_herding:updateDisplayedScore(dt)
-	local wasCounting = (self.displayedScore or 0) < self.score
+	local displayed = self.displayedScore or 0
+	local remaining = self.score - displayed
+	local wasCounting = remaining ~= 0
 
-	if self.displayedScore >= self.score then
+	if remaining == 0 then
 		self.displayedScore = self.score
 	else
-		local remaining = self.score - self.displayedScore
-		local gain = SCORE_COUNT_SPEED + remaining * SCORE_COUNT_SPEED_EXTRA
+		local gain = SCORE_COUNT_SPEED + math.abs(remaining) * SCORE_COUNT_SPEED_EXTRA
 		local step = math.max(1, math.floor(gain * dt))
-		self.displayedScore = math.min(self.score, self.displayedScore + step)
+		if remaining > 0 then
+			self.displayedScore = math.min(self.score, displayed + step)
+		else
+			self.displayedScore = math.max(self.score, displayed - step)
+		end
 	end
 
-	local isCounting = (self.displayedScore or 0) < self.score
+	local isCounting = (self.displayedScore or 0) ~= self.score
 	if isCounting and not self.scoreCountSoundPlaying then
 		sounds.get_points:stop()
 		sounds.get_points:play()
@@ -351,21 +408,56 @@ function gameplay_herding:updateDisplayedScore(dt)
 	end
 end
 
-function gameplay_herding:beginWaveClearSequence()
+function gameplay_herding:getRemainingAsteroidScoreValue()
+	local remainingScore = 0
+	for _, asteroid in ipairs(self.asteroids) do
+		remainingScore = remainingScore + self:getPopScoreForAsteroid(asteroid)
+	end
+	return remainingScore
+end
+
+function gameplay_herding:beginWaveClearSequence(completionType)
 	if self.waitingForNextWaveStart then
 		return
 	end
 
-	self.isPoppingWave = false
 	self.waitingForNextWaveStart = true
 	self.continueWasDown = false
 	self.clearedWave = self.wave
-	self.waveClearMessage = "WAVE " .. tostring(self.clearedWave) .. " COMPLETE"
+	self.waveCompletionType = completionType or "cleared"
+	if self.waveCompletionType == "timeout" then
+		self.waveClearMessage = "WAVE " .. tostring(self.clearedWave) .. " TIME UP"
+	else
+		self.waveClearMessage = "WAVE " .. tostring(self.clearedWave) .. " COMPLETE"
+	end
 	self.waveClearChars = 0
 	self.waveClearTypeTimer = 0
-	self.waveClearScoreDelay = 1.0
-	self.waveClearPromptDelay = 1.0
+	self.waveClearScoreDelay = 0
+	self.waveClearPromptDelay = 0
 	self.waveClearCanContinue = false
+	self.wavePreResolutionScore = self.score
+	self.waveAdjustmentApplied = false
+	self.waveClearPhase = "start_hold"
+	self.wavePhaseTimer = 2.5
+	self.displayedScore = self.waveStartScore or 0
+
+	local remainingScore = self:getRemainingAsteroidScoreValue()
+	local survivorMultiplier = self:getSurvivorBonusMultiplier()
+	if self.waveCompletionType == "timeout" then
+		self.wavePendingAdjustment = -(remainingScore * survivorMultiplier)
+		self.wavePopDirection = -1
+	else
+		self.wavePendingAdjustment = remainingScore * survivorMultiplier
+		self.wavePopDirection = 1
+	end
+
+	local popMultiplier = self:getSurvivorBonusMultiplier()
+	self.wavePopInterval = math.min(SURVIVOR_POP_INTERVAL_MAX, SURVIVOR_POP_INTERVAL_BASE + popMultiplier * SURVIVOR_POP_INTERVAL_PER_MULT)
+	self.wavePopTimer = self.wavePopInterval
+
+	self.tractorBeamActive = false
+	self.tractoredAsteroid = nil
+	self.tractorHoldDistance = 0
 	self.bullets = {}
 	self.ship.vx = 0
 	self.ship.vy = 0
@@ -382,17 +474,72 @@ function gameplay_herding:updateWaveClearSequence(dt)
 		return
 	end
 
-	if self.waveClearScoreDelay > 0 then
-		self.waveClearScoreDelay = math.max(0, self.waveClearScoreDelay - dt)
+	if self.waveClearPhase == "start_hold" then
+		self.wavePhaseTimer = math.max(0, (self.wavePhaseTimer or 0) - dt)
+		if self.wavePhaseTimer > 0 then
+			return
+		end
+		self.waveClearPhase = "count_to_pre"
 		return
 	end
 
-	if self.waveClearPromptDelay > 0 then
-		self.waveClearPromptDelay = math.max(0, self.waveClearPromptDelay - dt)
+	if self.waveClearPhase == "count_to_pre" then
+		if (self.displayedScore or 0) ~= (self.wavePreResolutionScore or 0) then
+			return
+		end
+		self.waveClearPhase = "pre_pop_wait"
+		self.wavePhaseTimer = 2.0
 		return
 	end
 
-	if (self.displayedScore or 0) < self.score then
+	if self.waveClearPhase == "pre_pop_wait" then
+		self.wavePhaseTimer = math.max(0, (self.wavePhaseTimer or 0) - dt)
+		if self.wavePhaseTimer > 0 then
+			return
+		end
+		self.waveClearPhase = "popping"
+		self.waveAdjustmentApplied = true
+		return
+	end
+
+	if self.waveClearPhase == "popping" then
+		if #self.asteroids > 0 then
+			self.wavePopTimer = self.wavePopTimer - dt
+			if self.wavePopTimer <= 0 then
+				self.wavePopTimer = self.wavePopInterval
+				local popped = table.remove(self.asteroids)
+				local popPoints = self:getPopScoreForAsteroid(popped) * self:getSurvivorBonusMultiplier() * self.wavePopDirection
+				self:addScore(popPoints)
+				sounds.hit_foe:play()
+			end
+			return
+		end
+
+		self.waveClearPhase = "final_hold"
+		self.wavePhaseTimer = 1.0
+		return
+	end
+
+	if self.waveClearPhase == "final_hold" then
+		if (self.displayedScore or 0) ~= self.score then
+			return
+		end
+		self.wavePhaseTimer = math.max(0, (self.wavePhaseTimer or 0) - dt)
+		if self.wavePhaseTimer > 0 then
+			return
+		end
+		self.waveClearPhase = "done"
+	end
+
+	if self.waveClearPhase ~= "done" then
+		return
+	end
+
+	if (self.clearedWave or 0) >= MAX_WAVES then
+		self.roundComplete = true
+		self.waitingForNextWaveStart = false
+		self.isGameOver = true
+		self.waveClearCanContinue = false
 		return
 	end
 
@@ -539,6 +686,138 @@ function gameplay_herding:spawnShipParticles(x, y, velX,velY)
     end
 end
 
+function gameplay_herding:applyBlackHoleForces(dt)
+	local blackHoleX, blackHoleY, blackHoleRadius = self:getBlackHole()
+	for _, asteroid in ipairs(self.asteroids) do
+		local dx = blackHoleX - asteroid.x
+		local dy = blackHoleY - asteroid.y
+		local dist = length(dx, dy)
+		if dist > 0.001 then
+			local nx = dx / dist
+			local ny = dy / dist
+			local tangentX = -ny
+			local tangentY = nx
+			local pullFactor = math.max(0, dist - blackHoleRadius)
+			local gravity = BLACK_HOLE_GRAVITY / (1 + pullFactor * 0.02)
+			local swirl = BLACK_HOLE_SWIRL / (1 + pullFactor * 0.03)
+			asteroid.vx = asteroid.vx + nx * gravity * dt + tangentX * swirl * dt
+			asteroid.vy = asteroid.vy + ny * gravity * dt + tangentY * swirl * dt
+		end
+
+		local asteroidSpeed = length(asteroid.vx, asteroid.vy)
+		local maxAsteroidSpeed = 320
+		if asteroidSpeed > maxAsteroidSpeed then
+			local speedScale = maxAsteroidSpeed / asteroidSpeed
+			asteroid.vx = asteroid.vx * speedScale
+			asteroid.vy = asteroid.vy * speedScale
+		end
+	end
+end
+
+function gameplay_herding:handleBlackHoleCapture()
+	local blackHoleX, blackHoleY, blackHoleRadius = self:getBlackHole()
+	for i = #self.asteroids, 1, -1 do
+		local asteroid = self.asteroids[i]
+		local dist = length(asteroid.x - blackHoleX, asteroid.y - blackHoleY)
+		if dist <= blackHoleRadius + BLACK_HOLE_CAPTURE_RADIUS then
+			if self:getAsteroidPolarity(asteroid) == self:getPlayerPolarity() then
+				if asteroid == self.tractoredAsteroid then
+					self.tractoredAsteroid = nil
+				end
+				table.remove(self.asteroids, i)
+				self:addSurvivorAsteroidScore(self:getPopScoreForAsteroid(asteroid))
+				sounds.hit_foe:play()
+				self:spawnParticles(asteroid.x, asteroid.y, 2, 14)
+			end
+		end
+	end
+end
+
+function gameplay_herding:isAsteroidInBeam(asteroid)
+	local ship = self.ship
+	local forwardX = math.cos(ship.angle)
+	local forwardY = math.sin(ship.angle)
+	local dx = asteroid.x - ship.x
+	local dy = asteroid.y - ship.y
+	local dist = length(dx, dy)
+	if dist <= 0.001 or dist > TRACTOR_BEAM_RANGE then
+		return false, dist
+	end
+
+	local forwardDist = dx * forwardX + dy * forwardY
+	if forwardDist <= 0 then
+		return false, dist
+	end
+
+	local sideDist = math.abs(dx * (-forwardY) + dy * forwardX)
+	local maxSide = math.tan(TRACTOR_BEAM_HALF_ANGLE) * forwardDist
+	return sideDist <= maxSide, dist
+end
+
+function gameplay_herding:updateTractorBeam(dt)
+	self.tractorBeamActive = love.mouse.isDown(1)
+	if not self.tractorBeamActive then
+		self.tractoredAsteroid = nil
+		return
+	end
+
+	local held = self.tractoredAsteroid
+	if held then
+		local exists = false
+		for _, asteroid in ipairs(self.asteroids) do
+			if asteroid == held then
+				exists = true
+				break
+			end
+		end
+		if not exists then
+			self.tractoredAsteroid = nil
+			held = nil
+		end
+	end
+
+	if not held then
+		local bestAsteroid = nil
+		local bestDist = math.huge
+		for _, asteroid in ipairs(self.asteroids) do
+			if self:getAsteroidPolarity(asteroid) == self:getPlayerPolarity() then
+				local inBeam, dist = self:isAsteroidInBeam(asteroid)
+				if inBeam and dist < bestDist then
+					bestDist = dist
+					bestAsteroid = asteroid
+				end
+			end
+		end
+
+		if bestAsteroid then
+			self.tractoredAsteroid = bestAsteroid
+			self.tractorHoldDistance = math.max(
+				self.ship.radius + bestAsteroid.radius + 18,
+				math.min(bestDist, TRACTOR_BEAM_RANGE * 0.72)
+			)
+			held = bestAsteroid
+		end
+	end
+
+	if held then
+		if self:getAsteroidPolarity(held) ~= self:getPlayerPolarity() then
+			self.tractoredAsteroid = nil
+			return
+		end
+
+		local targetDist = self.tractorHoldDistance or (TRACTOR_BEAM_RANGE * 0.6)
+		local targetX = self.ship.x + math.cos(self.ship.angle) * targetDist
+		local targetY = self.ship.y + math.sin(self.ship.angle) * targetDist
+		local pullX = targetX - held.x
+		local pullY = targetY - held.y
+		local lockStrength = math.min(1, dt * TRACTOR_BEAM_PULL)
+		held.x = held.x + pullX * lockStrength
+		held.y = held.y + pullY * lockStrength
+		held.vx = pullX * 7
+		held.vy = pullY * 7
+	end
+end
+
 function gameplay_herding:updateParticals(dt)
     if #particles < 1 then return end
 
@@ -662,10 +941,6 @@ function gameplay_herding:updateShip(dt)
 		ship.vy = ship.vy * k
 	end
 
-	-- if inputX ~= 0 or inputY ~= 0 then
-	-- 	self:spawnShipParticles(ship.x, ship.y, -ship.vx,-ship.vy)
-	-- end
-
 	ship.x = ship.x + ship.vx * dt
 	ship.y = ship.y + ship.vy * dt
 	local bouncedOnWall = bounceInsideCircle(ship, centerX, centerY, arenaRadius, 1.18)
@@ -703,6 +978,7 @@ end
 
 function gameplay_herding:updateAsteroids(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
+	self:applyBlackHoleForces(dt)
 	self:applyAsteroidPolarityForces(dt)
 
 	for _, asteroid in ipairs(self.asteroids) do
@@ -829,8 +1105,9 @@ function gameplay_herding:damagePlayer()
 	self:spawnShipHitEffect(hitX, hitY)
 	self:applyAsteroidHitRecoil(hitX, hitY)
 
-	-- sounds.crash:stop()
-	-- sounds.crash:play()
+	--sounds.crash:stop()
+	--sounds.crash:play()
+
 	playSound("roidSmash")
 	playSound("crash")
 	playSound("crash2")
@@ -874,32 +1151,13 @@ function gameplay_herding:handleShipBulletCollision()
 end
 
 function gameplay_herding:handleShipAsteroidCollision()
-	if self:isShipInvincible() then
-		return
-	end
-
 	local ship = self.ship
-	local playerPolarity = self:getPlayerPolarity()
 	for _, asteroid in ipairs(self.asteroids) do
 		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
 		if dist <= ship.radius + asteroid.radius then
-			local asteroidPolarity = self:getAsteroidPolarity(asteroid)
-			if asteroidPolarity == playerPolarity then
-				resolveBodyCollision(ship, asteroid, 1.05)
-			else
-				self:damagePlayer()
-				return
-			end
+			resolveBodyCollision(ship, asteroid, SHIP_ASTEROID_BOUNCE)
 		end
 	end
-end
-
-function gameplay_herding:startPopSequence()
-	local survivorMultiplier = self:getSurvivorBonusMultiplier()
-	self.isPoppingWave = true
-	self.popTimer = 0
-	self.popInterval = math.min(SURVIVOR_POP_INTERVAL_MAX, SURVIVOR_POP_INTERVAL_BASE + survivorMultiplier * SURVIVOR_POP_INTERVAL_PER_MULT)
-	self.shipWallAccelLockTimer = math.max(self.shipWallAccelLockTimer, 0.25)
 end
 
 function gameplay_herding:getPopScoreForAsteroid(asteroid)
@@ -911,29 +1169,22 @@ function gameplay_herding:getPopScoreForAsteroid(asteroid)
 	return 60
 end
 
-function gameplay_herding:updatePopSequence(dt)
-	self.popTimer = self.popTimer - dt
-	if self.popTimer > 0 then
-		return
-	end
-
-	self.popTimer = self.popInterval
-	if #self.asteroids > 0 then
-		local popped = table.remove(self.asteroids)
-		self:addSurvivorAsteroidScore(self:getPopScoreForAsteroid(popped))
-		sounds.hit_foe:play()
-	end
-
-	if #self.asteroids == 0 then
-		self:beginWaveClearSequence()
-	end
-end
-
 function gameplay_herding:startNextWave()
 	self.wave = self.wave + 1
 	self.waitingForNextWaveStart = false
-	self.orbitStartTime = love.timer.getTime()
+	self.waveCompletionType = nil
+	self.wavePreResolutionScore = 0
+	self.wavePendingAdjustment = 0
+	self.waveClearPhase = ""
+	self.wavePhaseTimer = 0
+	self.wavePopDirection = 1
+	self.wavePopInterval = 0.5
+	self.wavePopTimer = 0
+	self.waveAdjustmentApplied = false
+	self.orbitStartTime = nil
 	self:spawnWave(math.min(5 + self.wave, 12))
+	self.waveStartScore = self.score
+	self:startWaveCountdown()
 end
 
 function gameplay_herding:update(dt)
@@ -962,7 +1213,7 @@ function gameplay_herding:update(dt)
 	if self.waitingForNextWaveStart then
 		self:updateWaveClearSequence(dt)
 		local continueDown = love.keyboard.isDown("space")
-		if self.waveClearCanContinue and continueDown and not self.continueWasDown then
+		if self.waveClearCanContinue and (self.wave or 0) < MAX_WAVES and continueDown and not self.continueWasDown then
 			self:startNextWave()
 		end
 		self.continueWasDown = continueDown
@@ -970,40 +1221,46 @@ function gameplay_herding:update(dt)
 	end
 	self.continueWasDown = false
 
-	if self.isPoppingWave then
-		self:updatePopSequence(dt)
+	if self.waveCountdownActive then
+		self.waveCountdownTimer = math.max(0, (self.waveCountdownTimer or 0) - dt)
+		if self.waveCountdownTimer <= 0 then
+			self.waveCountdownActive = false
+			self.orbitStartTime = love.timer.getTime()
+			self.blackHolePulse = 0
+		end
 		return
 	end
+
+	self.blackHolePulse = (self.blackHolePulse or 0) + dt * 2.2
 
 	self.fireCooldown = math.max(0, self.fireCooldown - dt)
 
 	self:updateShip(dt)
 
-	local mouseDown = love.mouse.isDown(1)
-	if mouseDown and self.fireCooldown == 0 then
-		self:shoot()
-		self.fireCooldown = 0.27
-	end
-
-
-	self:updateBullets(dt)
 	self:updateAsteroids(dt)
 	self:handleAsteroidAsteroidCollisions()
-	self:handleBulletAsteroidCollisions()
-	self:handleShipBulletCollision()
 	self:handleShipAsteroidCollision()
+	self:updateTractorBeam(dt)
+	self:handleBlackHoleCapture()
 	self:updateParticals(dt)
 
 	if not self.isGameOver then
-		local yellowAsteroids = self:getAsteroidCountByPolarity("secondary")
-		if yellowAsteroids == 0 and #self.asteroids > 0 then
-			self:startPopSequence()
+		local completedOrbits = self:getCompletedOrbitsThisWave()
+		local primaryAsteroids = self:getAsteroidCountByPolarity("primary")
+
+		if primaryAsteroids == 0 and completedOrbits < MAX_WAVE_ORBITS then
+			self:beginWaveClearSequence("cleared")
+			return
+		end
+
+		if completedOrbits >= MAX_WAVE_ORBITS then
+			self:beginWaveClearSequence("timeout")
 			return
 		end
 	end
 
 	if #self.asteroids == 0 then
-		self:beginWaveClearSequence()
+		self:beginWaveClearSequence("cleared")
 		return
 	end
 end
@@ -1062,19 +1319,75 @@ function gameplay_herding:drawAsteroids()
 	end
 end
 
+function gameplay_herding:drawBlackHole()
+	local centerX, centerY, blackHoleRadius = self:getBlackHole()
+	local pulse = self.blackHolePulse or 0
+	local outerRadius = blackHoleRadius * 2.1
+
+	love.graphics.setColor(0, 0, 0, 0.92)
+	love.graphics.circle("fill", centerX, centerY, blackHoleRadius)
+	love.graphics.setColor(themes.current.secondary[1], themes.current.secondary[2], themes.current.secondary[3], 0.24)
+	love.graphics.setLineWidth(2)
+	love.graphics.circle("line", centerX, centerY, blackHoleRadius + 4 + pulse * 2)
+	love.graphics.arc("line", centerX, centerY, outerRadius, pulse, pulse + math.pi * 1.25, 24)
+	love.graphics.arc("line", centerX, centerY, outerRadius + 8, pulse + 0.9, pulse + math.pi * 1.55, 24)
+end
+
+function gameplay_herding:drawTractorBeam()
+	if not self.tractorBeamActive then
+		return
+	end
+
+	local ship = self.ship
+	local startAngle = ship.angle - TRACTOR_BEAM_HALF_ANGLE
+	local endAngle = ship.angle + TRACTOR_BEAM_HALF_ANGLE
+	local segments = 18
+	local points = { ship.x, ship.y }
+
+	for i = 0, segments do
+		local t = i / segments
+		local angle = startAngle + (endAngle - startAngle) * t
+		table.insert(points, ship.x + math.cos(angle) * TRACTOR_BEAM_RANGE)
+		table.insert(points, ship.y + math.sin(angle) * TRACTOR_BEAM_RANGE)
+	end
+
+	love.graphics.setColor(themes.current.primary[1], themes.current.primary[2], themes.current.primary[3], 0.14)
+	love.graphics.polygon("fill", points)
+	love.graphics.setColor(themes.current.primary[1], themes.current.primary[2], themes.current.primary[3], 0.55)
+	love.graphics.setLineWidth(2)
+	love.graphics.arc("line", ship.x, ship.y, TRACTOR_BEAM_RANGE, startAngle, endAngle, segments)
+
+	if self.tractoredAsteroid then
+		love.graphics.circle("line", self.tractoredAsteroid.x, self.tractoredAsteroid.y, self.tractoredAsteroid.radius + 4)
+	end
+end
+
 function gameplay_herding:drawScoreWatermark()
 	local centerX, centerY = self:getArena()
-	local label = tostring(self.displayedScore or 0)
+	local label
+	local color
+	local scale = 1.0
+	local alpha = 0.14
+
+	if self.waitingForNextWaveStart or self.isGameOver then
+		label = tostring(self.displayedScore or 0)
+		color = themes.current.secondary
+		local isCounting = (self.displayedScore or 0) ~= self.score
+		scale = isCounting and 1.5 or 1.0
+		alpha = isCounting and 0.22 or 0.14
+	else
+		label = tostring(self:getOrbitsRemainingThisWave())
+		color = themes.current.primary
+		scale = 1.35
+		alpha = 0.18
+	end
+
 	if gameoverfont then
 		love.graphics.setFont(gameoverfont)
 	elseif scorefont then
 		love.graphics.setFont(scorefont)
 	end
 
-	local color = themes.current.secondary
-	local isCounting = (self.displayedScore or 0) < self.score
-	local scale = isCounting and 1.5 or 1.0
-	local alpha = isCounting and 0.22 or 0.14
 	love.graphics.push()
 	love.graphics.translate(centerX, centerY - 28)
 	love.graphics.scale(scale, scale)
@@ -1084,43 +1397,60 @@ function gameplay_herding:drawScoreWatermark()
 end
 
 function gameplay_herding:drawHud()
+	if self.waveCountdownActive then
+		return
+	end
+
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.printf("LIVES: " .. tostring(self.lives), 0, 10,love.graphics.getWidth(),"center")
-	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
-	if self.isPoppingWave then
-		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
-		local survivorMultiplier = self:getSurvivorBonusMultiplier()
-		if gameoverfont then
-			love.graphics.setFont(gameoverfont)
-		end
-		love.graphics.printf(tostring(survivorMultiplier) .. "X", 0, worldH * 0.4, worldW, "center")
-		if scorefont then
-			love.graphics.setFont(scorefont)
-		end
+	if self.waitingForNextWaveStart or self.isGameOver then
+		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, 36, love.graphics.getWidth(), "center")
+	else
+		love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
+		love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
 	end
-
+	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then
 		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
 		local typedText = string.sub(self.waveClearMessage or "", 1, self.waveClearChars or 0)
 		love.graphics.setFont(gameoverfont)
 		love.graphics.printf(typedText, 0, worldH * 0.38, worldW, "center")
 
-		if (self.waveClearChars or 0) >= #(self.waveClearMessage or "") and (self.waveClearScoreDelay or 0) <= 0 then
+		if (self.waveClearChars or 0) >= #(self.waveClearMessage or "") then
 			if gameoverfont then
 				love.graphics.setFont(gameoverfont)
 			end
-			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
+			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.50, worldW, "center")
+
 			if self.waveClearCanContinue then
 				local nextWaveModifier = math.max(1, (self.wave or 1) + 1)
-				love.graphics.printf(tostring(nextWaveModifier) .. "X NEXT! ", 0, worldH * 0.60, worldW, "center")
-				love.graphics.printf("PRESS SPACE ", 0, worldH * 0.65, worldW, "center")
-				
+				love.graphics.printf(tostring(nextWaveModifier) .. "X NEXT! ", 0, worldH * 0.62, worldW, "center")
+				love.graphics.printf("PRESS SPACE ", 0, worldH * 0.67, worldW, "center")
+			elseif (self.clearedWave or 0) >= MAX_WAVES then
+				love.graphics.printf("ROUND COMPLETE", 0, worldH * 0.62, worldW, "center")
 			end
 		end
 	end
+end
+
+function gameplay_herding:drawWaveCountdown()
+	if not self.waveCountdownActive then
+		return
+	end
+
+	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
+	local value = math.max(1, math.ceil(self.waveCountdownTimer or 0))
+
+	if gameoverfont then
+		love.graphics.setFont(gameoverfont)
+	end
+	love.graphics.setColor(themes.current.primary)
+	love.graphics.printf("PUSH THE " .. themes.current.primary_name .. " BALLS", 0, worldH * 0.13, worldW, "center")
+	love.graphics.printf("INTO THE WORM HOLE", 0, worldH * 0.23, worldW, "center")
+	love.graphics.printf("BEFORE THE COUNTDOWN ENDS", 0, worldH * 0.33, worldW, "center")
+	love.graphics.printf(tostring(value), 0, worldH * 0.43, worldW, "center")
 end
 
 function gameplay_herding:drawArena()
@@ -1136,6 +1466,17 @@ function gameplay_herding:drawArena()
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
 
+function gameplay_herding:drawCountdownArena()
+	local centerX, centerY, arenaRadius = self:getArena()
+	arenaRadius = arenaRadius * 0.95
+	local firstOrbitColor = self:getColorForPolarity("secondary")
+	love.graphics.setColor(firstOrbitColor)
+	love.graphics.setLineWidth(4)
+	love.graphics.circle("line", centerX, centerY, arenaRadius)
+	-- Keep the countdown arena visually identical to orbit 1.
+	love.graphics.circle("fill", centerX, centerY - arenaRadius, 8)
+end
+
 function gameplay_herding:drawGameOver()
 	if not self.isGameOver then
 		return
@@ -1146,21 +1487,34 @@ function gameplay_herding:drawGameOver()
 	if gameoverfont then
 		love.graphics.setFont(gameoverfont)
 	end
-	love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
+	if self.roundComplete then
+		love.graphics.printf("ROUND COMPLETE", 0, worldH * 0.36, worldW, "center")
+	else
+		love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
+	end
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
+	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
 	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52, worldW, "center")
 end
 
 function gameplay_herding:draw()
 	love.graphics.clear(themes.current.background)
+	if self.waveCountdownActive then
+		self:drawCountdownArena()
+		self:drawWaveCountdown()
+		love.graphics.setColor(1, 1, 1, 1)
+		return
+	end
+
 	self:drawArena()
+	self:drawBlackHole()
+	self:drawTractorBeam()
 	self:drawScoreWatermark()
 	self:drawAsteroids()
 	self:drawParticals()
-	self:drawBullets()
 	self:drawShipHitEffects()
 	self:drawShip()
 	self:drawHud()

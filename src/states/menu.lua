@@ -10,6 +10,23 @@ local BilliardsState = require "src.states.gameplay_billiards"
 local state = require "src.state"
 
 local menu = {}
+local themeByOption = {
+    ["Play"] = "YRB",
+    ["Countdown"] = "TRON",
+    ["Herding Cats"] = "PASTELS",
+    ["Survival"] = "NEON NIGHT",
+    ["Battle"] = "THWUMP",
+    ["Billiards"] = "SPORTS BALL",
+    ["Options"] = "HACKER",
+    ["Exit"] = "MONOCHROME",
+}
+
+function menu:setThemeForOption(option)
+    local themeName = themeByOption[option]
+    if themeName then
+        themes.setByName(themeName)
+    end
+end
 
 function menu:enter()
     sounds.crash:stop()
@@ -20,6 +37,8 @@ function menu:enter()
     self.timer = 0
     self.showJoinText = true
     self.optionBounds = {}
+    self.hoveredOption = nil
+    self.previewedOption = nil
     self.mouseWasDown = false
         self.upWasDown = false
         self.downWasDown = false
@@ -47,15 +66,17 @@ function menu:update(dt)
 
     local mouseX, mouseY = love.mouse.getPosition()
     local hoveredOption = self:getOptionAtPosition(mouseX, mouseY)
-    local menuSound = "menuError"
-    local menuSoundPitch = 0.99
 
-    
     if hoveredOption then
-        if self.selected ~= hoveredOption then
-            playSound(menuSound,menuSoundPitch)
-        end
+        self.hoveredOption = hoveredOption
         self.selected = hoveredOption
+    else
+        self.hoveredOption = nil
+    end
+
+    if self.selected ~= self.previewedOption then
+        self.previewedOption = self.selected
+        self:setThemeForOption(self.options[self.selected])
     end
 
     local mouseIsDown = love.mouse.isDown(1)
@@ -66,25 +87,26 @@ function menu:update(dt)
 
     self.mouseWasDown = mouseIsDown
 
-        local downIsDown = love.keyboard.isDown("down") or love.keyboard.isDown("s")
+        local downIsDown = love.keyboard.isDown("down")
         if downIsDown and not self.downWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected + 1
-            playSound(menuSound,menuSoundPitch)
             if self.selected > #self.options then self.selected = 1 end
+            self:setThemeForOption(self.options[self.selected])
+            self.previewedOption = self.selected
         end
 
-        local upIsDown = love.keyboard.isDown("up") or love.keyboard.isDown("w")
+        local upIsDown = love.keyboard.isDown("up")
         if upIsDown and not self.upWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected - 1
-            playSound(menuSound,menuSoundPitch)
             if self.selected < 1 then self.selected = #self.options end
+            self:setThemeForOption(self.options[self.selected])
+            self.previewedOption = self.selected
         end
 
         local selectIsDown = love.keyboard.isDown("return") or love.keyboard.isDown("space")
         if selectIsDown and not self.selectWasDown then
-            playSound(menuSound,menuSoundPitch)
             self:executeChoice()
         end
 
@@ -112,16 +134,13 @@ function menu:draw()
     
     for i, option in ipairs(self.options) do
         local y = startY + (i * spacing)
-        local w = menulargefont:getWidth("> " .. option) or 160
         self.optionBounds[i] = {
             x = 300,
-            y = y - 6,
-            w = w,
-            h = 28 + 6,
+            y = y - 8,
+            w = 160,
+            h = 28,
         }
 
-        local pp = self.optionBounds[i]
-        -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
         if i == self.selected then
             -- Highlighted item: Larger font size (or simulated styling)
             love.graphics.setFont(menulargefont)
