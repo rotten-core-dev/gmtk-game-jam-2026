@@ -44,18 +44,21 @@ function soundManager:load()
     sounds.crash = love.audio.newSource("lib/audio/sfx/crash.ogg", "static")
     sounds.crash2 = love.audio.newSource("lib/audio/sfx/crash2.ogg", "static")
     sounds.crash3 = love.audio.newSource("lib/audio/sfx/crash3.ogg", "static")
-          
+    sounds.jets = love.audio.newSource("lib/audio/sfx/jets2.ogg", "static")
     
     --menu--
     sounds.menuError = love.audio.newSource("lib/audio/sfx/menu_error.mp3", "static")
 
- 
+    local CurrentTime = love.timer.getTime()
+    jetsCounter  = CurrentTime
+    
     
     function setvolume()
         masterVolume = 1
         menueffectVolume = 1
         effectVolume = 1
         musicVolume = 1
+        jetVolume = 0.1
 
         --master--
         
@@ -77,6 +80,7 @@ function soundManager:load()
         sounds.crash:setVolume(masterVolume * effectVolume)
         sounds.crash2:setVolume(masterVolume * effectVolume)
         sounds.crash3:setVolume(masterVolume * effectVolume)
+        sounds.jets:setVolume(masterVolume * effectVolume * jetVolume)
 
         --music--
         sounds.boop:setVolume(masterVolume * musicVolume)
@@ -100,6 +104,18 @@ function playShoot()
     local pitch = love.math.random() * 0.12 + 0.98
     s:setPitch(pitch)
     s:play()
+end
+
+function playJetsSound()
+    local jetsRepeat  = 0.05
+    local CurrentTime = love.timer.getTime()
+    if CurrentTime > jetsCounter + jetsRepeat then
+        local s = sounds.jets:clone()
+        local pitch = love.math.random() * 0.12 + 0.98
+        s:setPitch(pitch)
+        s:play()
+        jetsCounter = CurrentTime
+    end
 end
 
 function playSound(soundName, pitchRng)

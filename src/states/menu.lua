@@ -66,7 +66,7 @@ function menu:update(dt)
 
     self.mouseWasDown = mouseIsDown
 
-        local downIsDown = love.keyboard.isDown("down")
+        local downIsDown = love.keyboard.isDown("down") or love.keyboard.isDown("s")
         if downIsDown and not self.downWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected + 1
@@ -74,7 +74,7 @@ function menu:update(dt)
             if self.selected > #self.options then self.selected = 1 end
         end
 
-        local upIsDown = love.keyboard.isDown("up")
+        local upIsDown = love.keyboard.isDown("up") or love.keyboard.isDown("w")
         if upIsDown and not self.upWasDown then
             shakes.trigger(shakes.current.power,0.25,CurrentTime)
             self.selected = self.selected - 1

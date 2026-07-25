@@ -640,7 +640,8 @@ function gameplay:updateShip(dt)
 	if inputX ~= 0 or inputY ~= 0 then
 		local mag = length(inputX, inputY)
 		inputX, inputY = inputX / mag, inputY / mag
-			self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
+		self:spawnShipParticles(ship.x, ship.y, -inputX,-inputY)
+		playJetsSound()
 	end
 
 	if self.shipWallAccelLockTimer <= 0 then
