@@ -11,11 +11,11 @@ local state = require "src.state"
 
 local menu = {}
 local themeByOption = {
-    ["Play"] = "YRB",
+    ["Play"] = "NEON NIGHT",
     ["Countdown"] = "TRON",
     ["Herding Cats"] = "PASTELS",
-    ["Survival"] = "NEON NIGHT",
-    ["Battle"] = "THWUMP",
+    ["Survival"] = "THWUMP",
+    ["Dog Fight"] = "YRB",
     ["Billiards"] = "SPORTS BALL",
     ["Options"] = "HACKER",
     ["Exit"] = "MONOCHROME",
@@ -32,7 +32,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Play","Countdown","Herding Cats", "Survival","Battle", "Billiards" ,"Options", "Exit"}
+    self.options = {"Play","Countdown","Herding Cats", "Survival","Dog Fight", "Billiards" ,"Options", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -145,7 +145,7 @@ function menu:draw()
             -- Highlighted item: Larger font size (or simulated styling)
             love.graphics.setFont(menulargefont)
             love.graphics.setColor(themes.current.primary) 
-            love.graphics.print("> " .. option, 300, y)
+            love.graphics.print("*" .. option .. "*", 300, y)
         else
             -- Normal item: Smaller font size
             love.graphics.setFont(largefont)
@@ -169,7 +169,7 @@ function menu:executeChoice()
         state.switch(HerdingState)
     elseif choice == "Survival" then
         state.switch(SurvivalState)
-    elseif choice == "Battle" then
+    elseif choice == "Dog Fight" then
         state.switch(BattleState)
     elseif choice == "Billiards" then
         state.switch(BilliardsState)

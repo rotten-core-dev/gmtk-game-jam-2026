@@ -2,14 +2,17 @@ local themes = require "src.preferences.themes"
 local sounds = require "src.system.sounds"
 local state = require "src.state"
 
-local gameplay_survival = {}
-local PLAYER_POLARITY = "primary"
-local SHIP_INVINCIBLE_DURATION = 2.5
-local SCORE_COUNT_SPEED = 220
-local SCORE_COUNT_SPEED_EXTRA = 6
-local SURVIVOR_POP_INTERVAL_BASE = 0.55
-local SURVIVOR_POP_INTERVAL_PER_MULT = 0.12
-local SURVIVOR_POP_INTERVAL_MAX = 1.35
+local gameplay_battle = {}
+
+local PLAYER_OWNER = "player"
+local ENEMY_OWNER = "enemy"
+local ROUND_WIN_TARGET = 2
+local ORBIT_ASTEROIDS_PER_SHIP = 3
+local ORBIT_RADIUS = 72
+local ORBIT_SPEED = 1.45
+local PLAYER_FIRE_COOLDOWN = 0.27
+local AI_FIRE_COOLDOWN = 0.8
+local AI_STRAFE_SPEED = 1.4
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -106,16 +109,43 @@ local function resolveBodyCollision(a, b, bounce)
 	end
 end
 
-function gameplay_survival:getArena()
+local function getAsteroidRadius(size)
+	if size == "large" then
+		return 30
+	elseif size == "medium" then
+		return 18
+	end
+	return 10
+end
+
+local function getAsteroidSpeed(size)
+	if size == "large" then
+		return 70
+	elseif size == "medium" then
+		return 95
+	end
+	return 125
+end
+
+local function getNextAsteroidSize(size)
+	if size == "large" then
+		return "medium"
+	elseif size == "medium" then
+		return "small"
+	end
+	return nil
+end
+
+function gameplay_battle:getArena()
 	local shrinkAmount = 0.95
-	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
+	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	local arenaLineWidth = 4
 	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
 end
 
-function gameplay_survival:getOrbitState()
+function gameplay_battle:getOrbitState()
 	local orbitPeriod = 6
 	local elapsed = love.timer.getTime() - (self.orbitStartTime or love.timer.getTime())
 	local completedOrbits = math.floor(elapsed / orbitPeriod)
@@ -124,282 +154,231 @@ function gameplay_survival:getOrbitState()
 	return completedOrbits, orbitAngle
 end
 
-function gameplay_survival:getArenaPlayerColor()
-	return self:getColorForPolarity(self:getPlayerPolarity())
-end
-
-function gameplay_survival:getArenaPolarity()
-	local completedOrbits = self:getOrbitState()
-	if completedOrbits % 2 == 0 then
-		return "secondary"
-	end
-	return "primary"
-end
-
-function gameplay_survival:getArenaColor()
-	return self:getColorForPolarity(self:getArenaPolarity())
-end
-
-function gameplay_survival:getPlayerPolarity()
-	return PLAYER_POLARITY
-end
-
-function gameplay_survival:getAsteroidPolarity(asteroid)
-	local completedOrbits = self:getOrbitState()
-	local polarity = asteroid.polarity or "primary"
-	if completedOrbits % 2 == 1 then
-		if polarity == "primary" then
-			return "secondary"
-		end
-		return "primary"
-	end
-	return polarity
-end
-
-function gameplay_survival:getColorForPolarity(polarity)
-	if polarity == "secondary" then
+function gameplay_battle:getColorForOwner(owner)
+	if owner == ENEMY_OWNER then
 		return themes.current.secondary
 	end
 	return themes.current.primary
 end
 
-function gameplay_survival:getAsteroidCountByPolarity(polarity)
+function gameplay_battle:getShipByOwner(owner)
+	if owner == ENEMY_OWNER then
+		return self.enemyShip
+	end
+	return self.ship
+end
+
+function gameplay_battle:getEnemyOwner(owner)
+	if owner == ENEMY_OWNER then
+		return PLAYER_OWNER
+	end
+	return ENEMY_OWNER
+end
+
+function gameplay_battle:getOrbitAsteroidCount(owner)
 	local count = 0
 	for _, asteroid in ipairs(self.asteroids) do
-		if self:getAsteroidPolarity(asteroid) == polarity then
+		if asteroid.owner == owner and asteroid.inOrbit then
 			count = count + 1
 		end
 	end
 	return count
 end
 
-function gameplay_survival:spawnAsteroid(x, y, size, polarity)
-	local radiusBySize = {
-		large = 30,
-		medium = 18,
-		small = 10,
-	}
+function gameplay_battle:getCombatTargetForOwner(owner)
+	local enemyOwner = self:getEnemyOwner(owner)
+	local sourceShip = self:getShipByOwner(owner)
+	local bestTarget = self:getShipByOwner(enemyOwner)
+	local bestDist = math.huge
 
-	local speedBySize = {
-		large = 40,
-		medium = 65,
-		small = 95,
-	}
+	for _, asteroid in ipairs(self.asteroids) do
+		if asteroid.owner == enemyOwner and asteroid.inOrbit then
+			local dist = length(asteroid.x - sourceShip.x, asteroid.y - sourceShip.y)
+			if dist < bestDist then
+				bestDist = dist
+				bestTarget = asteroid
+			end
+		end
+	end
 
+	return bestTarget
+end
+
+function gameplay_battle:updateOrbitLayout(owner)
+	local orbiting = {}
+	for _, asteroid in ipairs(self.asteroids) do
+		if asteroid.owner == owner and asteroid.inOrbit then
+			table.insert(orbiting, asteroid)
+		end
+	end
+
+	local count = #orbiting
+	for index, asteroid in ipairs(orbiting) do
+		asteroid.orbitPhase = ((index - 1) / math.max(1, count)) * math.pi * 2
+	end
+end
+
+function gameplay_battle:spawnFloatingAsteroid(owner, x, y, size, dirX, dirY)
+	local dist = length(dirX or 0, dirY or 0)
 	local angle = love.math.random() * math.pi * 2
-	local speed = speedBySize[size]
+	local nx = dist > 0.001 and (dirX / dist) or math.cos(angle)
+	local ny = dist > 0.001 and (dirY / dist) or math.sin(angle)
+	local speed = getAsteroidSpeed(size)
 
 	table.insert(self.asteroids, {
 		x = x,
 		y = y,
-		vx = math.cos(angle) * speed,
-		vy = math.sin(angle) * speed,
+		vx = nx * speed,
+		vy = ny * speed,
 		size = size,
-		radius = radiusBySize[size],
-		polarity = polarity or "primary",
+		radius = getAsteroidRadius(size),
+		owner = owner,
+		inOrbit = false,
 	})
 end
 
-function gameplay_survival:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
-	local centerX, centerY, arenaRadius = self:getArena()
-	for _ = 1, 60 do
-		local angle = love.math.random() * math.pi * 2
-		local distance = math.sqrt(love.math.random())
-		local x = centerX + math.cos(angle) * distance * (arenaRadius - 48)
-		local y = centerY + math.sin(angle) * distance * (arenaRadius - 48)
+function gameplay_battle:spawnFloatingSplit(owner, x, y, size, normalX, normalY)
+	local nextSize = getNextAsteroidSize(size)
+	if not nextSize then
+		return
+	end
 
-		if length(x - shipX, y - shipY) >= minShipDistance then
-			local overlap = false
-			for _, asteroid in ipairs(self.asteroids) do
-				if length(x - asteroid.x, y - asteroid.y) < (asteroid.radius + 30 + 8) then
-					overlap = true
-					break
-				end
-			end
+	local nx = normalX or 1
+	local ny = normalY or 0
+	local tx = -ny
+	local ty = nx
+	self:spawnFloatingAsteroid(owner, x, y, nextSize, nx + tx * 0.4, ny + ty * 0.4)
+	self:spawnFloatingAsteroid(owner, x, y, nextSize, nx - tx * 0.4, ny - ty * 0.4)
+end
 
-			if not overlap then
-				return x, y
-			end
+function gameplay_battle:removeAsteroid(asteroid)
+	for index = #self.asteroids, 1, -1 do
+		if self.asteroids[index] == asteroid then
+			table.remove(self.asteroids, index)
+			return
 		end
 	end
-
-	local fallbackAngle = love.math.random() * math.pi * 2
-	return centerX + math.cos(fallbackAngle) * (arenaRadius - 56), centerY + math.sin(fallbackAngle) * (arenaRadius - 56)
 end
 
-function gameplay_survival:spawnWave(count)
-	local centerX, centerY = self:getArena()
-	local shipX = (self.ship and self.ship.x) or centerX
-	local shipY = (self.ship and self.ship.y) or centerY
-	local minShipDistance = (self.ship and self.ship.radius or 12) + 30 + 40
-	local asteroidPolarities = {}
-	local primaryCount = math.floor(count / 2)
-	for _ = 1, primaryCount do
-		table.insert(asteroidPolarities, "primary")
-	end
-	for _ = primaryCount + 1, count do
-		table.insert(asteroidPolarities, "secondary")
-	end
-	for i = #asteroidPolarities, 2, -1 do
-		local swapIndex = love.math.random(i)
-		asteroidPolarities[i], asteroidPolarities[swapIndex] = asteroidPolarities[swapIndex], asteroidPolarities[i]
+function gameplay_battle:damageOrbitAsteroid(asteroid, normalX, normalY)
+	local nextSize = getNextAsteroidSize(asteroid.size)
+	local owner = asteroid.owner
+
+	if not nextSize then
+		self:removeAsteroid(asteroid)
+		self:updateOrbitLayout(owner)
+		return
 	end
 
-	for _ = 1, count do
-		local polarity = asteroidPolarities[_]
-		local x, y = self:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
-		self:spawnAsteroid(x, y, "large", polarity)
-	end
+	asteroid.size = nextSize
+	asteroid.radius = getAsteroidRadius(nextSize)
+	self:spawnFloatingAsteroid(owner, asteroid.x, asteroid.y, nextSize, normalX, normalY)
+	self:updateOrbitLayout(owner)
 end
 
-function gameplay_survival:resetRun()
-	local centerX, centerY = self:getArena()
+function gameplay_battle:damageFloatingAsteroid(asteroid, normalX, normalY)
+	if asteroid.size == "small" then
+		self:removeAsteroid(asteroid)
+		return
+	end
 
-	self.ship = {
-		x = centerX,
-		y = centerY,
+	local owner = asteroid.owner
+	local x = asteroid.x
+	local y = asteroid.y
+	local size = asteroid.size
+	self:removeAsteroid(asteroid)
+	self:spawnFloatingSplit(owner, x, y, size, normalX, normalY)
+end
+
+function gameplay_battle:createShip(owner, x, y)
+	return {
+		owner = owner,
+		x = x,
+		y = y,
 		vx = 0,
 		vy = 0,
-		angle = 0,
+		angle = owner == ENEMY_OWNER and math.pi or 0,
 		radius = 20,
+		alive = true,
 	}
+end
 
-	self.bullets = {}
+function gameplay_battle:spawnOrbitAsteroids(owner)
+	local ship = self:getShipByOwner(owner)
+	for index = 1, ORBIT_ASTEROIDS_PER_SHIP do
+		table.insert(self.asteroids, {
+			x = ship.x,
+			y = ship.y,
+			vx = 0,
+			vy = 0,
+			size = "large",
+			radius = getAsteroidRadius("large"),
+			owner = owner,
+			inOrbit = true,
+			orbitPhase = ((index - 1) / ORBIT_ASTEROIDS_PER_SHIP) * math.pi * 2,
+		})
+	end
+	self:updateOrbitLayout(owner)
+end
+
+function gameplay_battle:startRound()
+	local centerX, centerY, arenaRadius = self:getArena()
+	self.ship = self:createShip(PLAYER_OWNER, centerX - arenaRadius * 0.45, centerY)
+	self.enemyShip = self:createShip(ENEMY_OWNER, centerX + arenaRadius * 0.45, centerY)
 	self.asteroids = {}
+	self.bullets = {}
+	self.shipHitEffects = {}
+	self.playerFireCooldown = 0
+	self.enemyFireCooldown = AI_FIRE_COOLDOWN * 0.5
+	self.shipWallAccelLockTimer = 0
+	self.enemyWallAccelLockTimer = 0
+	self.orbitClock = 0
+	self.roundResolved = false
+	self.waitingForNextRound = false
+	self.roundMessage = ""
+	self.orbitStartTime = love.timer.getTime()
+	self:spawnOrbitAsteroids(PLAYER_OWNER)
+	self:spawnOrbitAsteroids(ENEMY_OWNER)
+end
+
+function gameplay_battle:resetRun()
 	self.score = 0
 	self.displayedScore = 0
-	self.lives = 3
-	self.wave = 1
-	self.clearedWave = 0
+	self.round = 1
+	self.playerRoundsWon = 0
+	self.enemyRoundsWon = 0
 	self.isGameOver = false
-	self.mouseWasDown = false
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.continueWasDown = false
-	self.fireCooldown = 0
-	self.shipWallAccelLockTimer = 0
-	self.shipInvincibleTimer = 0
-	self.isPoppingWave = false
-	self.waitingForNextWaveStart = false
-	self.popTimer = 0
-	self.popInterval = 0.5
-	self.shipHitEffects = {}
-	self.waveClearMessage = ""
-	self.waveClearChars = 0
-	self.waveClearTypeTimer = 0
-	self.waveClearScoreDelay = 0
-	self.waveClearPromptDelay = 0
-	self.waveClearCanContinue = false
 	self.scoreCountSoundPlaying = false
 	sounds.get_points:setLooping(true)
 	sounds.get_points:stop()
-	self.orbitStartTime = love.timer.getTime()
-
-	self:spawnWave(5)
+	self:startRound()
 end
 
-function gameplay_survival:addScore(points)
-	self.score = self.score + points
+function gameplay_battle:enter()
+	self:resetRun()
 end
 
-function gameplay_survival:getWaveScoreMultiplier()
-	return math.max(1, self.wave or 1)
-end
-
-function gameplay_survival:getSurvivorBonusMultiplier()
-	return self:getWaveScoreMultiplier() * 2
-end
-
-function gameplay_survival:addWaveScaledScore(basePoints)
-	local multiplier = self:getWaveScoreMultiplier()
-	self:addScore(basePoints * multiplier)
-end
-
-function gameplay_survival:addSurvivorAsteroidScore(basePoints)
-	local multiplier = self:getSurvivorBonusMultiplier()
-	self:addScore(basePoints * multiplier)
-end
-
-function gameplay_survival:updateDisplayedScore(dt)
-	local wasCounting = (self.displayedScore or 0) < self.score
-
-	if self.displayedScore >= self.score then
+function gameplay_battle:updateDisplayedScore(dt)
+	local displayed = self.displayedScore or 0
+	local remaining = self.score - displayed
+	if remaining == 0 then
 		self.displayedScore = self.score
+		return
+	end
+
+	local gain = 220 + math.abs(remaining) * 6
+	local step = math.max(1, math.floor(gain * dt))
+	if remaining > 0 then
+		self.displayedScore = math.min(self.score, displayed + step)
 	else
-		local remaining = self.score - self.displayedScore
-		local gain = SCORE_COUNT_SPEED + remaining * SCORE_COUNT_SPEED_EXTRA
-		local step = math.max(1, math.floor(gain * dt))
-		self.displayedScore = math.min(self.score, self.displayedScore + step)
-	end
-
-	local isCounting = (self.displayedScore or 0) < self.score
-	if isCounting and not self.scoreCountSoundPlaying then
-		sounds.get_points:stop()
-		sounds.get_points:play()
-		self.scoreCountSoundPlaying = true
-	elseif not isCounting and self.scoreCountSoundPlaying then
-		sounds.get_points:stop()
-		self.scoreCountSoundPlaying = false
-	end
-
-	if not wasCounting and not isCounting then
-		self.displayedScore = self.score
+		self.displayedScore = math.max(self.score, displayed - step)
 	end
 end
 
-function gameplay_survival:beginWaveClearSequence()
-	if self.waitingForNextWaveStart then
-		return
-	end
-
-	self.isPoppingWave = false
-	self.waitingForNextWaveStart = true
-	self.continueWasDown = false
-	self.clearedWave = self.wave
-	self.waveClearMessage = "WAVE " .. tostring(self.clearedWave) .. " COMPLETE"
-	self.waveClearChars = 0
-	self.waveClearTypeTimer = 0
-	self.waveClearScoreDelay = 1.0
-	self.waveClearPromptDelay = 1.0
-	self.waveClearCanContinue = false
-	self.bullets = {}
-	self.ship.vx = 0
-	self.ship.vy = 0
-end
-
-function gameplay_survival:updateWaveClearSequence(dt)
-	if self.waveClearChars < #self.waveClearMessage then
-		self.waveClearTypeTimer = self.waveClearTypeTimer + dt
-		local typeInterval = 0.045
-		while self.waveClearTypeTimer >= typeInterval and self.waveClearChars < #self.waveClearMessage do
-			self.waveClearTypeTimer = self.waveClearTypeTimer - typeInterval
-			self.waveClearChars = self.waveClearChars + 1
-		end
-		return
-	end
-
-	if self.waveClearScoreDelay > 0 then
-		self.waveClearScoreDelay = math.max(0, self.waveClearScoreDelay - dt)
-		return
-	end
-
-	if self.waveClearPromptDelay > 0 then
-		self.waveClearPromptDelay = math.max(0, self.waveClearPromptDelay - dt)
-		return
-	end
-
-	if (self.displayedScore or 0) < self.score then
-		return
-	end
-
-	self.waveClearCanContinue = true
-end
-
-function gameplay_survival:isShipInvincible()
-	return debug.invn or (self.shipInvincibleTimer or 0) > 0
-end
-
-function gameplay_survival:spawnShipHitEffect(x, y)
+function gameplay_battle:spawnShipHitEffect(x, y)
 	local effect = {
 		x = x,
 		y = y,
@@ -426,33 +405,7 @@ function gameplay_survival:spawnShipHitEffect(x, y)
 	table.insert(self.shipHitEffects, effect)
 end
 
-function gameplay_survival:applyAsteroidHitRecoil(originX, originY)
-	local recoilRadius = 600
-	for _, asteroid in ipairs(self.asteroids) do
-		local dx = asteroid.x - originX
-		local dy = asteroid.y - originY
-		local dist = length(dx, dy)
-		local effectiveDist = math.max(0, dist - asteroid.radius)
-		if effectiveDist <= recoilRadius then
-			local nx, ny
-			if dist <= 0.001 then
-				local angle = love.math.random() * math.pi * 2
-				nx = math.cos(angle)
-				ny = math.sin(angle)
-			else
-				nx = dx / dist
-				ny = dy / dist
-			end
-
-			local falloff = 1 - (effectiveDist / recoilRadius)
-			local impulse = 500 * falloff + 40
-			asteroid.vx = asteroid.vx + nx * impulse
-			asteroid.vy = asteroid.vy + ny * impulse
-		end
-	end
-end
-
-function gameplay_survival:updateShipHitEffects(dt)
+function gameplay_battle:updateShipHitEffects(dt)
 	for i = #self.shipHitEffects, 1, -1 do
 		local effect = self.shipHitEffects[i]
 		effect.ttl = effect.ttl - dt
@@ -476,12 +429,12 @@ function gameplay_survival:updateShipHitEffects(dt)
 	end
 end
 
-function gameplay_survival:enter()
-	self:resetRun()
-end
+function gameplay_battle:shoot(owner)
+	local ship = self:getShipByOwner(owner)
+	if not ship or not ship.alive then
+		return
+	end
 
-function gameplay_survival:shoot()
-	local ship = self.ship
 	local bulletSpeed = 420
 	table.insert(self.bullets, {
 		x = ship.x + math.cos(ship.angle) * (ship.radius + 4),
@@ -490,63 +443,14 @@ function gameplay_survival:shoot()
 		vy = ship.vy + math.sin(ship.angle) * bulletSpeed,
 		ttl = 2.0,
 		radius = 2,
-		polarity = self:getPlayerPolarity(),
+		owner = owner,
 	})
-	playShoot()
-end
-
-function gameplay_survival:splitAsteroid(asteroid)
-	if asteroid.size == "large" then
-		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
-		self:spawnAsteroid(asteroid.x, asteroid.y, "medium", asteroid.polarity)
-		self:addWaveScaledScore(20)
-	elseif asteroid.size == "medium" then
-		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
-		self:spawnAsteroid(asteroid.x, asteroid.y, "small", asteroid.polarity)
-		self:addWaveScaledScore(40)
-	else
-		self:addWaveScaledScore(60)
+	if playShoot then
+		playShoot()
 	end
 end
 
-function gameplay_survival:applyAsteroidPolarityForces(dt)
-	local ship = self.ship
-	local playerPolarity = self:getPlayerPolarity()
-
-	for _, asteroid in ipairs(self.asteroids) do
-		local asteroidPolarity = self:getAsteroidPolarity(asteroid)
-		local dx = asteroid.x - ship.x
-		local dy = asteroid.y - ship.y
-		local dist = length(dx, dy)
-		if dist > 0.001 then
-			local nx = dx / dist
-			local ny = dy / dist
-
-			if asteroidPolarity == playerPolarity then
-				local baseRepel = 300 / (1 + dist * 0.03)
-				local approachSpeed = ship.vx * nx + ship.vy * ny
-				local bonusRepel = math.max(0, approachSpeed) * 1.15
-				local repelForce = baseRepel + bonusRepel
-				asteroid.vx = asteroid.vx + nx * repelForce * dt
-				asteroid.vy = asteroid.vy + ny * repelForce * dt
-			else
-				local attractForce = 300 / (1 + dist * 0.03)
-				asteroid.vx = asteroid.vx - nx * attractForce * dt
-				asteroid.vy = asteroid.vy - ny * attractForce * dt
-			end
-		end
-
-		local asteroidSpeed = length(asteroid.vx, asteroid.vy)
-		local maxAsteroidSpeed = 300
-		if asteroidSpeed > maxAsteroidSpeed then
-			local speedScale = maxAsteroidSpeed / asteroidSpeed
-			asteroid.vx = asteroid.vx * speedScale
-			asteroid.vy = asteroid.vy * speedScale
-		end
-	end
-end
-
-function gameplay_survival:updateShip(dt)
+function gameplay_battle:updatePlayerShip(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
 	local ship = self.ship
 	self.shipWallAccelLockTimer = math.max(0, (self.shipWallAccelLockTimer or 0) - dt)
@@ -567,7 +471,8 @@ function gameplay_survival:updateShip(dt)
 
 	if inputX ~= 0 or inputY ~= 0 then
 		local mag = length(inputX, inputY)
-		inputX, inputY = inputX / mag, inputY / mag
+		inputX = inputX / mag
+		inputY = inputY / mag
 	end
 
 	if self.shipWallAccelLockTimer <= 0 then
@@ -576,23 +481,20 @@ function gameplay_survival:updateShip(dt)
 		ship.vy = ship.vy + inputY * accel * dt
 	end
 
-	local drag = 1.0
-	ship.vx = ship.vx * drag
-	ship.vy = ship.vy * drag
+	ship.vx = ship.vx * 0.995
+	ship.vy = ship.vy * 0.995
 
-	local maxSpeed = 220
 	local speed = length(ship.vx, ship.vy)
-	if speed > maxSpeed then
-		local k = maxSpeed / speed
-		ship.vx = ship.vx * k
-		ship.vy = ship.vy * k
+	if speed > 220 then
+		local scale = 220 / speed
+		ship.vx = ship.vx * scale
+		ship.vy = ship.vy * scale
 	end
 
 	ship.x = ship.x + ship.vx * dt
 	ship.y = ship.y + ship.vy * dt
-	local bouncedOnWall = bounceInsideCircle(ship, centerX, centerY, arenaRadius, 1.18)
-	if bouncedOnWall then
-		self.shipWallAccelLockTimer = 0.22
+	if bounceInsideCircle(ship, centerX, centerY, arenaRadius, 1.12) then
+		self.shipWallAccelLockTimer = 0.18
 	end
 
 	local mouseX, mouseY = love.mouse.getPosition()
@@ -605,262 +507,257 @@ function gameplay_survival:updateShip(dt)
 	end
 end
 
-function gameplay_survival:updateBullets(dt)
+function gameplay_battle:updateEnemyShip(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
+	local ship = self.enemyShip
+	self.enemyWallAccelLockTimer = math.max(0, (self.enemyWallAccelLockTimer or 0) - dt)
 
-	for i = #self.bullets, 1, -1 do
-		local bullet = self.bullets[i]
+	local target = self:getCombatTargetForOwner(ENEMY_OWNER)
+	ship.angle = angleTo(target.x - ship.x, target.y - ship.y)
+
+	local desiredX = centerX + arenaRadius * 0.42
+	local desiredY = centerY + math.sin(self.orbitClock * AI_STRAFE_SPEED) * arenaRadius * 0.35
+	local dx = desiredX - ship.x
+	local dy = desiredY - ship.y
+	local dist = length(dx, dy)
+	local inputX, inputY = 0, 0
+	if dist > 8 then
+		inputX = dx / dist
+		inputY = dy / dist
+	end
+
+	if self.enemyWallAccelLockTimer <= 0 then
+		local accel = 360
+		ship.vx = ship.vx + inputX * accel * dt
+		ship.vy = ship.vy + inputY * accel * dt
+	end
+
+	ship.vx = ship.vx * 0.992
+	ship.vy = ship.vy * 0.992
+
+	local speed = length(ship.vx, ship.vy)
+	if speed > 180 then
+		local scale = 180 / speed
+		ship.vx = ship.vx * scale
+		ship.vy = ship.vy * scale
+	end
+
+	ship.x = ship.x + ship.vx * dt
+	ship.y = ship.y + ship.vy * dt
+	if bounceInsideCircle(ship, centerX, centerY, arenaRadius, 1.08) then
+		self.enemyWallAccelLockTimer = 0.18
+	end
+
+	self.enemyFireCooldown = math.max(0, (self.enemyFireCooldown or 0) - dt)
+	if self.enemyFireCooldown == 0 then
+		self:shoot(ENEMY_OWNER)
+		self.enemyFireCooldown = AI_FIRE_COOLDOWN
+	end
+end
+
+function gameplay_battle:updateOrbitingAsteroids(dt)
+	self.orbitClock = (self.orbitClock or 0) + dt
+	for _, asteroid in ipairs(self.asteroids) do
+		if asteroid.inOrbit then
+			local ship = self:getShipByOwner(asteroid.owner)
+			local direction = asteroid.owner == ENEMY_OWNER and -1 or 1
+			local angle = self.orbitClock * ORBIT_SPEED * direction + (asteroid.orbitPhase or 0)
+			local orbitRadius = ORBIT_RADIUS + asteroid.radius * 0.25
+			asteroid.x = ship.x + math.cos(angle) * orbitRadius
+			asteroid.y = ship.y + math.sin(angle) * orbitRadius
+			asteroid.vx = -math.sin(angle) * orbitRadius * ORBIT_SPEED * direction
+			asteroid.vy = math.cos(angle) * orbitRadius * ORBIT_SPEED * direction
+		end
+	end
+end
+
+function gameplay_battle:updateBullets(dt)
+	local centerX, centerY, arenaRadius = self:getArena()
+	for index = #self.bullets, 1, -1 do
+		local bullet = self.bullets[index]
 		bullet.x = bullet.x + bullet.vx * dt
 		bullet.y = bullet.y + bullet.vy * dt
-        -- ttl means how long they last for
 		bullet.ttl = bullet.ttl - dt
 
 		if bullet.ttl <= 0 then
-			table.remove(self.bullets, i)
+			table.remove(self.bullets, index)
 		elseif isOutsideCircle(bullet.x, bullet.y, centerX, centerY, arenaRadius - bullet.radius) then
 			bounceInsideCircle(bullet, centerX, centerY, arenaRadius, 0.98)
 		end
 	end
 end
 
-function gameplay_survival:updateAsteroids(dt)
+function gameplay_battle:updateFloatingAsteroids(dt)
 	local centerX, centerY, arenaRadius = self:getArena()
-	self:applyAsteroidPolarityForces(dt)
-
 	for _, asteroid in ipairs(self.asteroids) do
-		asteroid.x = asteroid.x + asteroid.vx * dt
-		asteroid.y = asteroid.y + asteroid.vy * dt
-		bounceInsideCircle(asteroid, centerX, centerY, arenaRadius, 1.0)
+		if not asteroid.inOrbit then
+			asteroid.x = asteroid.x + asteroid.vx * dt
+			asteroid.y = asteroid.y + asteroid.vy * dt
+			bounceInsideCircle(asteroid, centerX, centerY, arenaRadius, 0.96)
+		end
 	end
 end
 
-function gameplay_survival:handleAsteroidAsteroidCollisions()
-	local splitSpeedThreshold = 190
-	local toRemove = {}
-	local toSplit = {}
+function gameplay_battle:destroyShip(owner)
+	if self.roundResolved then
+		return
+	end
 
-	for i = 1, #self.asteroids - 1 do
-		local a = self.asteroids[i]
-		for j = i + 1, #self.asteroids do
-			local b = self.asteroids[j]
-			local dx = b.x - a.x
-			local dy = b.y - a.y
-			local dist = length(dx, dy)
-			local minDist = a.radius + b.radius
+	local ship = self:getShipByOwner(owner)
+	ship.alive = false
+	self:spawnShipHitEffect(ship.x, ship.y)
+	sounds.crash:stop()
+	sounds.crash:play()
+	self.bullets = {}
+	self.roundResolved = true
 
-			if dist <= minDist then
-				local relVx = a.vx - b.vx
-				local relVy = a.vy - b.vy
-				local relSpeed = length(relVx, relVy)
-				local aPolarity = self:getAsteroidPolarity(a)
-				local bPolarity = self:getAsteroidPolarity(b)
-
-				if aPolarity ~= bPolarity and relSpeed >= splitSpeedThreshold then
-					local splitA = a.size ~= "small"
-					local splitB = b.size ~= "small"
-
-					-- Small asteroids should bounce even in high-speed opposite-color hits.
-					if not splitA or not splitB then
-						resolveBodyCollision(a, b, 0.9)
-					end
-
-					if splitA and not toRemove[i] then
-						toRemove[i] = true
-						toSplit[i] = a
-					end
-					if splitB and not toRemove[j] then
-						toRemove[j] = true
-						toSplit[j] = b
-					end
-				else
-					resolveBodyCollision(a, b, 0.9)
-				end
-			end
+	local winner = self:getEnemyOwner(owner)
+	if winner == PLAYER_OWNER then
+		self.playerRoundsWon = self.playerRoundsWon + 1
+		self.score = self.score + 250
+		if self.playerRoundsWon >= ROUND_WIN_TARGET then
+			self.roundMessage = "YOU WIN"
+			self.isGameOver = true
+			return
 		end
-	end
-
-	for i = #self.asteroids, 1, -1 do
-		if toRemove[i] then
-			table.remove(self.asteroids, i)
+		self.roundMessage = "ROUND " .. tostring(self.round) .. " WON"
+	else
+		self.enemyRoundsWon = self.enemyRoundsWon + 1
+		if self.enemyRoundsWon >= ROUND_WIN_TARGET then
+			self.roundMessage = "AI WINS"
+			self.isGameOver = true
+			return
 		end
+		self.roundMessage = "ROUND " .. tostring(self.round) .. " LOST"
 	end
 
-	for _, asteroid in pairs(toSplit) do
-		self:splitAsteroid(asteroid)
-	end
+	self.waitingForNextRound = true
+	self.continueWasDown = false
+	self.round = self.round + 1
 end
 
-function gameplay_survival:handleBulletAsteroidCollisions()
+function gameplay_battle:handleBulletCollisions()
 	for bi = #self.bullets, 1, -1 do
 		local bullet = self.bullets[bi]
-		local bulletHit = false
+		if not bullet then
+			goto continue
+		end
+		local bulletRemoved = false
 
-		for ai = #self.asteroids, 1, -1 do
-			local asteroid = self.asteroids[ai]
-			local asteroidPolarity = self:getAsteroidPolarity(asteroid)
-			local dist = length(bullet.x - asteroid.x, bullet.y - asteroid.y)
-			if dist <= bullet.radius + asteroid.radius then
-				if bullet.polarity ~= asteroidPolarity then
+		for _, asteroid in ipairs(self.asteroids) do
+			if asteroid.inOrbit and asteroid.owner ~= bullet.owner then
+				local dist = length(bullet.x - asteroid.x, bullet.y - asteroid.y)
+				if dist <= bullet.radius + asteroid.radius then
+					local nx = asteroid.x - bullet.x
+					local ny = asteroid.y - bullet.y
+					local normalLength = length(nx, ny)
+					if normalLength == 0 then
+						nx, ny, normalLength = 1, 0, 1
+					end
+					self:damageOrbitAsteroid(asteroid, nx / normalLength, ny / normalLength)
 					table.remove(self.bullets, bi)
-					table.remove(self.asteroids, ai)
-					self:splitAsteroid(asteroid)
-					bulletHit = true
 					sounds.hit_foe:play()
+					bulletRemoved = true
 					break
 				end
-
-				local dx = bullet.x - asteroid.x
-				local dy = bullet.y - asteroid.y
-				if dx == 0 and dy == 0 then
-					dx = 1
-				end
-				local normalLen = length(dx, dy)
-				local nx = dx / normalLen
-				local ny = dy / normalLen
-
-				bullet.x = asteroid.x + nx * (asteroid.radius + bullet.radius + 0.5)
-				bullet.y = asteroid.y + ny * (asteroid.radius + bullet.radius + 0.5)
-
-				local impactSpeed = bullet.vx * nx + bullet.vy * ny
-				if impactSpeed < 0 then
-					bullet.vx = (bullet.vx - 2 * impactSpeed * nx) * 0.96
-					bullet.vy = (bullet.vy - 2 * impactSpeed * ny) * 0.96
-				end
-
-				bulletHit = true
-				break
 			end
 		end
 
-		if bulletHit then
-			goto continue
+		if not bulletRemoved then
+			local targetShip = self:getShipByOwner(self:getEnemyOwner(bullet.owner))
+			if targetShip.alive then
+				local dist = length(bullet.x - targetShip.x, bullet.y - targetShip.y)
+				if dist <= bullet.radius + targetShip.radius then
+					table.remove(self.bullets, bi)
+					bulletRemoved = true
+					if self:getOrbitAsteroidCount(targetShip.owner) == 0 then
+						self:destroyShip(targetShip.owner)
+						return
+					end
+				end
+			end
 		end
 
 		::continue::
 	end
 end
 
-function gameplay_survival:damagePlayer()
-	if self:isShipInvincible() then
-		return
-	end
+function gameplay_battle:handleFloatingAsteroidInteractions()
+	for i = #self.asteroids, 1, -1 do
+		local floating = self.asteroids[i]
+		if floating and not floating.inOrbit then
+			local handled = false
 
-	local hitX = self.ship.x
-	local hitY = self.ship.y
-	self:spawnShipHitEffect(hitX, hitY)
-	self:applyAsteroidHitRecoil(hitX, hitY)
+			for _, orbiting in ipairs(self.asteroids) do
+				if orbiting.inOrbit and orbiting.owner ~= floating.owner then
+					local dx = orbiting.x - floating.x
+					local dy = orbiting.y - floating.y
+					local dist = length(dx, dy)
+					if dist <= orbiting.radius + floating.radius then
+						local normalLength = dist > 0.001 and dist or 1
+						local nx = dx / normalLength
+						local ny = dy / normalLength
+						self:damageOrbitAsteroid(orbiting, nx, ny)
+						self:damageFloatingAsteroid(floating, -nx, -ny)
+						sounds.hit_foe:play()
+						handled = true
+						break
+					end
+				end
+			end
 
-	sounds.crash:stop()
-	sounds.crash:play()
-	self.lives = self.lives - 1
-	local centerX, centerY = self:getArena()
-	self.ship.x = centerX
-	self.ship.y = centerY
-	self.ship.vx = 0
-	self.ship.vy = 0
-	self.shipWallAccelLockTimer = 0.18
-	self.shipInvincibleTimer = SHIP_INVINCIBLE_DURATION
-	if self.lives <= 0 then
-		self.isGameOver = true
-		self.shipInvincibleTimer = 0
-	end
-end
-
-function gameplay_survival:handleShipBulletCollision()
-	if self:isShipInvincible() then
-		return
-	end
-
-	local ship = self.ship
-	local playerPolarity = self:getPlayerPolarity()
-
-	for bi = #self.bullets, 1, -1 do
-		local bullet = self.bullets[bi]
-		if bullet.polarity ~= playerPolarity then
-			local dist = length(ship.x - bullet.x, ship.y - bullet.y)
-			if dist <= ship.radius + bullet.radius then
-				table.remove(self.bullets, bi)
-				self:damagePlayer()
-				return
+			if not handled then
+				for _, ship in ipairs({ self.ship, self.enemyShip }) do
+					if ship.alive and ship.owner ~= floating.owner then
+						local dist = length(ship.x - floating.x, ship.y - floating.y)
+						if dist <= ship.radius + floating.radius then
+							if self:getOrbitAsteroidCount(ship.owner) == 0 then
+								self:removeAsteroid(floating)
+								self:destroyShip(ship.owner)
+							else
+								resolveBodyCollision(ship, floating, 0.8)
+							end
+							break
+						end
+					end
+				end
 			end
 		end
 	end
 end
 
-function gameplay_survival:handleShipAsteroidCollision()
-	if self:isShipInvincible() then
-		return
-	end
-
-	local ship = self.ship
-	local playerPolarity = self:getPlayerPolarity()
-	for _, asteroid in ipairs(self.asteroids) do
-		local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
-		if dist <= ship.radius + asteroid.radius then
-			local asteroidPolarity = self:getAsteroidPolarity(asteroid)
-			if asteroidPolarity == playerPolarity then
-				resolveBodyCollision(ship, asteroid, 1.05)
-			else
-				self:damagePlayer()
-				return
+function gameplay_battle:handleShipAsteroidCollisions()
+	for _, ship in ipairs({ self.ship, self.enemyShip }) do
+		if ship.alive then
+			for _, asteroid in ipairs(self.asteroids) do
+				local dist = length(ship.x - asteroid.x, ship.y - asteroid.y)
+				if dist <= ship.radius + asteroid.radius then
+					if asteroid.inOrbit and asteroid.owner == ship.owner then
+						resolveBodyCollision(ship, asteroid, 0.65)
+					elseif not asteroid.inOrbit then
+						if asteroid.owner ~= ship.owner and self:getOrbitAsteroidCount(ship.owner) == 0 then
+							self:removeAsteroid(asteroid)
+							self:destroyShip(ship.owner)
+							return
+						else
+							resolveBodyCollision(ship, asteroid, 0.8)
+						end
+					end
+				end
 			end
 		end
 	end
 end
 
-function gameplay_survival:startPopSequence()
-	local survivorMultiplier = self:getSurvivorBonusMultiplier()
-	self.isPoppingWave = true
-	self.popTimer = 0
-	self.popInterval = math.min(SURVIVOR_POP_INTERVAL_MAX, SURVIVOR_POP_INTERVAL_BASE + survivorMultiplier * SURVIVOR_POP_INTERVAL_PER_MULT)
-	self.shipWallAccelLockTimer = math.max(self.shipWallAccelLockTimer, 0.25)
-end
-
-function gameplay_survival:getPopScoreForAsteroid(asteroid)
-	if asteroid.size == "large" then
-		return 20
-	elseif asteroid.size == "medium" then
-		return 40
-	end
-	return 60
-end
-
-function gameplay_survival:updatePopSequence(dt)
-	self.popTimer = self.popTimer - dt
-	if self.popTimer > 0 then
-		return
-	end
-
-	self.popTimer = self.popInterval
-	if #self.asteroids > 0 then
-		local popped = table.remove(self.asteroids)
-		self:addSurvivorAsteroidScore(self:getPopScoreForAsteroid(popped))
-		sounds.hit_foe:play()
-	end
-
-	if #self.asteroids == 0 then
-		self:beginWaveClearSequence()
-	end
-end
-
-function gameplay_survival:startNextWave()
-	self.wave = self.wave + 1
-	self.waitingForNextWaveStart = false
-	self.orbitStartTime = love.timer.getTime()
-	self:spawnWave(math.min(5 + self.wave, 12))
-end
-
-function gameplay_survival:update(dt)
+function gameplay_battle:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
 	if escapeDown and not self.escapeWasDown then
 		sounds.get_points:stop()
-		self.scoreCountSoundPlaying = false
 		local MenuState = require "src.states.menu"
 		state.switch(MenuState)
 		return
 	end
 	self.escapeWasDown = escapeDown
-	self.shipInvincibleTimer = math.max(0, (self.shipInvincibleTimer or 0) - dt)
 	self:updateDisplayedScore(dt)
 	self:updateShipHitEffects(dt)
 
@@ -873,55 +770,35 @@ function gameplay_survival:update(dt)
 		return
 	end
 
-	if self.waitingForNextWaveStart then
-		self:updateWaveClearSequence(dt)
+	if self.waitingForNextRound then
 		local continueDown = love.keyboard.isDown("space")
-		if self.waveClearCanContinue and continueDown and not self.continueWasDown then
-			self:startNextWave()
+		if continueDown and not self.continueWasDown then
+			self:startRound()
 		end
 		self.continueWasDown = continueDown
 		return
 	end
 	self.continueWasDown = false
 
-	if self.isPoppingWave then
-		self:updatePopSequence(dt)
-		return
-	end
-
-	self.fireCooldown = math.max(0, self.fireCooldown - dt)
-
-	self:updateShip(dt)
+	self.playerFireCooldown = math.max(0, (self.playerFireCooldown or 0) - dt)
+	self:updatePlayerShip(dt)
+	self:updateEnemyShip(dt)
 
 	local mouseDown = love.mouse.isDown(1)
-	if mouseDown and self.fireCooldown == 0 then
-		self:shoot()
-		self.fireCooldown = 0.27
+	if mouseDown and self.playerFireCooldown == 0 then
+		self:shoot(PLAYER_OWNER)
+		self.playerFireCooldown = PLAYER_FIRE_COOLDOWN
 	end
 
-
+	self:updateOrbitingAsteroids(dt)
 	self:updateBullets(dt)
-	self:updateAsteroids(dt)
-	self:handleAsteroidAsteroidCollisions()
-	self:handleBulletAsteroidCollisions()
-	self:handleShipBulletCollision()
-	self:handleShipAsteroidCollision()
-
-	if not self.isGameOver then
-		local yellowAsteroids = self:getAsteroidCountByPolarity("secondary")
-		if yellowAsteroids == 0 and #self.asteroids > 0 then
-			self:startPopSequence()
-			return
-		end
-	end
-
-	if #self.asteroids == 0 then
-		self:beginWaveClearSequence()
-		return
-	end
+	self:updateFloatingAsteroids(dt)
+	self:handleBulletCollisions()
+	self:handleFloatingAsteroidInteractions()
+	self:handleShipAsteroidCollisions()
 end
 
-function gameplay_survival:drawShipHitEffects()
+function gameplay_battle:drawShipHitEffects()
 	for _, effect in ipairs(self.shipHitEffects) do
 		local t = math.max(0, effect.ttl / effect.duration)
 		local ringAlpha = 0.75 * t
@@ -938,18 +815,12 @@ function gameplay_survival:drawShipHitEffects()
 	end
 end
 
-function gameplay_survival:drawShip()
-	local isInvincible = (self.shipInvincibleTimer or 0) > 0
-	if isInvincible then
-		local blinkRate = 14
-		if math.floor(self.shipInvincibleTimer * blinkRate) % 2 == 0 then
-			return
-		end
+function gameplay_battle:drawShipBody(ship)
+	if not ship.alive then
+		return
 	end
 
-	local ship = self.ship
 	local r = ship.radius
-
 	local noseX = ship.x + math.cos(ship.angle) * (r + 4)
 	local noseY = ship.y + math.sin(ship.angle) * (r + 4)
 	local leftX = ship.x + math.cos(ship.angle + 2.5) * r
@@ -957,127 +828,85 @@ function gameplay_survival:drawShip()
 	local rightX = ship.x + math.cos(ship.angle - 2.5) * r
 	local rightY = ship.y + math.sin(ship.angle - 2.5) * r
 
-	love.graphics.setColor(self:getArenaPlayerColor())
+	love.graphics.setColor(self:getColorForOwner(ship.owner))
 	love.graphics.polygon("fill", noseX, noseY, leftX, leftY, rightX, rightY)
 end
 
-function gameplay_survival:drawBullets()
+function gameplay_battle:drawBullets()
 	for _, bullet in ipairs(self.bullets) do
-		love.graphics.setColor(self:getColorForPolarity(bullet.polarity))
+		love.graphics.setColor(self:getColorForOwner(bullet.owner))
 		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
 	end
 end
 
-function gameplay_survival:drawAsteroids()
+function gameplay_battle:drawAsteroids()
 	for _, asteroid in ipairs(self.asteroids) do
-		love.graphics.setColor(self:getColorForPolarity(self:getAsteroidPolarity(asteroid)))
+		love.graphics.setColor(self:getColorForOwner(asteroid.owner))
 		love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
+		if asteroid.inOrbit then
+			love.graphics.setColor(1, 1, 1, 0.18)
+			love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius + 2)
+		end
 	end
 end
 
-function gameplay_survival:drawScoreWatermark()
-	local centerX, centerY = self:getArena()
-	local label = tostring(self.displayedScore or 0)
-	if gameoverfont then
-		love.graphics.setFont(gameoverfont)
-	elseif scorefont then
-		love.graphics.setFont(scorefont)
-	end
-
-	local color = themes.current.secondary
-	local isCounting = (self.displayedScore or 0) < self.score
-	local scale = isCounting and 1.5 or 1.0
-	local alpha = isCounting and 0.22 or 0.14
-	love.graphics.push()
-	love.graphics.translate(centerX, centerY - 28)
-	love.graphics.scale(scale, scale)
-	love.graphics.setColor(color[1], color[2], color[3], alpha)
-	love.graphics.printf(label, -centerX / scale, 0, (centerX * 2) / scale, "center")
-	love.graphics.pop()
-end
-
-function gameplay_survival:drawHud()
+function gameplay_battle:drawHud()
+	local worldW = love.graphics.getWidth()
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.printf("LIVES: " .. tostring(self.lives), 0, 10,love.graphics.getWidth(),"center")
-	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
-	if self.isPoppingWave then
-		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
-		local survivorMultiplier = self:getSurvivorBonusMultiplier()
+	love.graphics.printf("ROUND: " .. tostring(math.min(self.round, 3)) .. "/3", 0, 10, worldW, "center")
+	love.graphics.printf("YOU " .. tostring(self.playerRoundsWon) .. "  -  " .. tostring(self.enemyRoundsWon) .. " AI", 0, 36, worldW, "center")
+	love.graphics.printf("YOUR ORBITS: " .. tostring(self:getOrbitAsteroidCount(PLAYER_OWNER)), 24, 10, worldW * 0.5 - 24, "left")
+	love.graphics.printf("ENEMY ORBITS: " .. tostring(self:getOrbitAsteroidCount(ENEMY_OWNER)), worldW * 0.5, 10, worldW * 0.5 - 24, "right")
+
+	if self.waitingForNextRound then
+		local worldH = love.graphics.getHeight()
 		if gameoverfont then
 			love.graphics.setFont(gameoverfont)
 		end
-		love.graphics.printf(tostring(survivorMultiplier) .. "X", 0, worldH * 0.4, worldW, "center")
+		love.graphics.printf(self.roundMessage or "ROUND OVER", 0, worldH * 0.4, worldW, "center")
 		if scorefont then
 			love.graphics.setFont(scorefont)
 		end
-	end
-
-	if self.waitingForNextWaveStart then
-		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
-		local typedText = string.sub(self.waveClearMessage or "", 1, self.waveClearChars or 0)
-		love.graphics.setFont(gameoverfont)
-		love.graphics.printf(typedText, 0, worldH * 0.38, worldW, "center")
-
-		if (self.waveClearChars or 0) >= #(self.waveClearMessage or "") and (self.waveClearScoreDelay or 0) <= 0 then
-			if gameoverfont then
-				love.graphics.setFont(gameoverfont)
-			end
-			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
-			if self.waveClearCanContinue then
-				local nextWaveModifier = math.max(1, (self.wave or 1) + 1)
-				love.graphics.printf(tostring(nextWaveModifier) .. "X NEXT! ", 0, worldH * 0.60, worldW, "center")
-				love.graphics.printf("PRESS SPACE ", 0, worldH * 0.65, worldW, "center")
-				
-			end
+		love.graphics.printf("PRESS SPACE", 0, worldH * 0.55, worldW, "center")
+	elseif self.isGameOver then
+		local worldH = love.graphics.getHeight()
+		if gameoverfont then
+			love.graphics.setFont(gameoverfont)
 		end
+		love.graphics.printf(self.roundMessage or "GAME OVER", 0, worldH * 0.4, worldW, "center")
+		if scorefont then
+			love.graphics.setFont(scorefont)
+		end
+		love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.55, worldW, "center")
 	end
 end
 
-function gameplay_survival:drawArena()
+function gameplay_battle:drawArena()
 	local centerX, centerY, arenaRadius = self:getArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
 	local orbiterRadius = 8
 
-	love.graphics.setColor(self:getArenaColor())
+	love.graphics.setColor(themes.current.secondary)
 	love.graphics.setLineWidth(4)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
 
-function gameplay_survival:drawGameOver()
-	if not self.isGameOver then
-		return
-	end
-
-	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
-	love.graphics.setColor(themes.current.primary)
-	if gameoverfont then
-		love.graphics.setFont(gameoverfont)
-	end
-	love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
-	love.graphics.setColor(themes.current.secondary)
-	if scorefont then
-		love.graphics.setFont(scorefont)
-	end
-	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52, worldW, "center")
-end
-
-function gameplay_survival:draw()
+function gameplay_battle:draw()
 	love.graphics.clear(themes.current.background)
 	self:drawArena()
-	self:drawScoreWatermark()
 	self:drawAsteroids()
 	self:drawBullets()
 	self:drawShipHitEffects()
-	self:drawShip()
+	self:drawShipBody(self.ship)
+	self:drawShipBody(self.enemyShip)
 	self:drawHud()
-	self:drawGameOver()
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
-return gameplay_survival
+return gameplay_battle
