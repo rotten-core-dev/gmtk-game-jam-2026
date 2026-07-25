@@ -51,6 +51,8 @@ function menu:update(dt)
     
     if hoveredOption then
         self.selected = hoveredOption
+    else
+        self.selected = nil
     end
 
     local mouseIsDown = love.mouse.isDown(1)
