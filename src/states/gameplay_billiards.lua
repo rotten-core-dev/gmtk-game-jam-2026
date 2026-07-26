@@ -978,13 +978,17 @@ function gameplay_billiards:drawHud()
 	if self.winner then
 		local worldH = love.graphics.getHeight()
 		if gameoverfont then
-			love.graphics.setFont(gameoverfont)
+			love.graphics.setFont(gameoverfontbig)
 		end
-		love.graphics.printf(self.message, 0, worldH * 0.4, worldW, "center")
+		-- love.graphics.printf(self.message, 0, worldH * 0.4, worldW, "center")
+		love.graphics.setColor(themes.current.secondary)
+		love.graphics.printf(self.message, 0, worldH * 0.36 + 20, worldW, "center")
+		love.graphics.setColor(themes.current.primary)
+		love.graphics.printf(self.message, 0, worldH * 0.36, worldW, "center")
 		if scorefont then
 			love.graphics.setFont(scorefont)
 		end
-		love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.56, worldW, "center")
+		love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.56 + 40, worldW, "center")
 	end
 end
 
