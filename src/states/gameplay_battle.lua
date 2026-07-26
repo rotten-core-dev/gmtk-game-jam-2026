@@ -138,12 +138,12 @@ local function getNextAsteroidSize(size)
 end
 
 function gameplay_battle:getArena()
-	local shrinkAmount = 0.9
+	local shrinkAmount = 0.98
 	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
-	local completedOrbits = self:getOrbitState()
+	local completedOrbits = self:getArenaCompletedOrbits()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	local arenaLineWidth = 4
-	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
+	return worldW * 0.5, worldH * 0.5, (worldH * 0.45 - arenaLineWidth) * shrinkScale
 end
 
 function gameplay_battle:getOrbitState()
@@ -155,8 +155,16 @@ function gameplay_battle:getOrbitState()
 	return completedOrbits, orbitAngle
 end
 
-function gameplay_battle:getArenaPolarity()
+function gameplay_battle:getArenaCompletedOrbits()
+	if self.freezeRoundOrbitCount ~= nil then
+		return self.freezeRoundOrbitCount
+	end
 	local completedOrbits = self:getOrbitState()
+	return completedOrbits
+end
+
+function gameplay_battle:getArenaPolarity()
+	local completedOrbits = self:getArenaCompletedOrbits()
 	if completedOrbits % 2 == 0 then
 		return "secondary"
 	end
@@ -176,6 +184,13 @@ function gameplay_battle:getColorForOwner(owner)
 		return themes.current.secondary
 	end
 	return themes.current.primary
+end
+
+function gameplay_battle:getColorForEnemy(owner)
+	if owner == ENEMY_OWNER then
+		return themes.current.primary
+	end
+	return themes.current.secondary
 end
 
 function gameplay_battle:getShipByOwner(owner)
@@ -294,6 +309,7 @@ function gameplay_battle:damageOrbitAsteroid(asteroid, normalX, normalY)
 end
 
 function gameplay_battle:damageFloatingAsteroid(asteroid, normalX, normalY)
+	self:spawnParticles(asteroid.x,asteroid.y)
 	if asteroid.size == "small" then
 		self:removeAsteroid(asteroid)
 		return
@@ -352,6 +368,7 @@ function gameplay_battle:startRound()
 	self.orbitClock = 0
 	self.roundResolved = false
 	self.waitingForNextRound = false
+	self.freezeRoundOrbitCount = nil
 	self.roundMessage = ""
 	self.orbitStartTime = love.timer.getTime()
 	self:spawnOrbitAsteroids(PLAYER_OWNER)
@@ -368,6 +385,7 @@ function gameplay_battle:resetRun()
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.continueWasDown = false
+	self.freezeRoundOrbitCount = nil
 	self.scoreCountSoundPlaying = false
 	sounds.get_points:setLooping(true)
 	sounds.get_points:stop()
@@ -459,7 +477,7 @@ function gameplay_battle:shoot(owner)
 		vx = ship.vx + math.cos(ship.angle) * bulletSpeed,
 		vy = ship.vy + math.sin(ship.angle) * bulletSpeed,
 		ttl = 2.0,
-		radius = 2,
+		radius = 10,
 		owner = owner,
 	})
 	if playShoot then
@@ -528,6 +546,7 @@ function gameplay_battle:updateParticals(dt)
 end
 
 function gameplay_battle:drawParticals()
+	love.graphics.setLineWidth(20)
 	if #particles < 1 then return end
 
 	for i = 1,#particles do
@@ -725,6 +744,10 @@ function gameplay_battle:updateFloatingAsteroids(dt)
 end
 
 function gameplay_battle:destroyShip(owner)
+	playSound("crash")
+	playSound("crash2")
+	playSound("crash3")
+	self:spawnParticles(owner.x, owner.y,50,100)
 	if self.roundResolved then
 		return
 	end
@@ -759,6 +782,8 @@ function gameplay_battle:destroyShip(owner)
 
 	self.waitingForNextRound = true
 	self.continueWasDown = false
+	local completedOrbits = self:getOrbitState()
+	self.freezeRoundOrbitCount = completedOrbits
 	self.round = self.round + 1
 end
 
@@ -879,6 +904,7 @@ end
 
 function gameplay_battle:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
+	self:updateParticals(dt)
 	if escapeDown and not self.escapeWasDown then
 		sounds.get_points:stop()
 		local MenuState = require "src.states.menu"
@@ -924,7 +950,6 @@ function gameplay_battle:update(dt)
 	self:handleBulletCollisions()
 	self:handleFloatingAsteroidInteractions()
 	self:handleShipAsteroidCollisions()
-	self:updateParticals(dt)
 end
 
 function gameplay_battle:drawShipHitEffects()
@@ -964,17 +989,23 @@ end
 function gameplay_battle:drawBullets()
 	for _, bullet in ipairs(self.bullets) do
 		love.graphics.setColor(self:getColorForOwner(bullet.owner))
-		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
+		love.graphics.setLineWidth(6)
+		love.graphics.line(bullet.x,bullet.y,bullet.x + (bullet.vx*0.1), bullet.y + (bullet.vy*0.1))
 	end
 end
 
 function gameplay_battle:drawAsteroids()
+	
 	for _, asteroid in ipairs(self.asteroids) do
-		love.graphics.setColor(self:getColorForOwner(asteroid.owner))
-		love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
+		love.graphics.setLineWidth(3)
 		if asteroid.inOrbit then
-			love.graphics.setColor(1, 1, 1, 0.18)
+			love.graphics.setColor(self:getColorForOwner(asteroid.owner))
+			love.graphics.circle("fill", asteroid.x, asteroid.y, asteroid.radius)
+			love.graphics.setColor(self:getColorForEnemy(asteroid.owner))
 			love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius + 2)
+		else 
+			love.graphics.setColor(self:getColorForOwner(asteroid.owner))
+			love.graphics.circle("line", asteroid.x, asteroid.y, asteroid.radius)
 		end
 	end
 end
@@ -1018,10 +1049,10 @@ function gameplay_battle:drawArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
-	local orbiterRadius = 8
+	local orbiterRadius = 25
 
 	love.graphics.setColor(self:getArenaColor())
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(20)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
