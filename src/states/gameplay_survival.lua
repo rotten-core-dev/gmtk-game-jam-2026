@@ -1076,7 +1076,7 @@ function gameplay_survival:drawScoreWatermark()
 	local color = themes.current.secondary
 	local isCounting = (self.displayedScore or 0) < self.score
 	local scale = isCounting and 1.5 or 1.0
-	local alpha = isCounting and 0.22 or 0.14
+	local alpha = isCounting and 0.22 or 0.7
 	love.graphics.push()
 	love.graphics.translate(centerX, centerY - 28)
 	love.graphics.scale(scale, scale)
