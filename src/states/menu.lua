@@ -15,8 +15,8 @@ local themeByOption = {
     ["Countdown"] = "TRON",
     ["Herding Cats"] = "PASTELS",
     ["Survival"] = "THWUMP",
-    ["Dog Fight"] = "YRB",
-    ["Billiards"] = "SPORTS BALL",
+    ["Dog Fight"] = "SPORTS BALL",
+    ["Billiards"] = "YRB",
     ["Options"] = "HACKER",
     ["Exit"] = "MONOCHROME",
 }
@@ -133,7 +133,7 @@ function menu:draw()
     local startY = WINDOW_HEIGHT/2 - 100
     local spacing = 50
     self.optionBounds = {}  
-    love.graphics.setFont(titlefont)
+    love.graphics.setFont(menutitlefont)
     love.graphics.setColor(themes.current.secondary)
     love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2), WINDOW_HEIGHT/2-240 + 10)
     love.graphics.setColor(themes.current.primary)
@@ -142,32 +142,46 @@ function menu:draw()
     
     for i, option in ipairs(self.options) do
         local y = startY + (i * spacing)
-        local w = menulargefont:getWidth("> " .. option) or 160
         local xPos = WINDOW_WIDTH/2
-        local xPosMod = xPos - (w/2) 
-        self.optionBounds[i] = {
-            x = xPosMod,
-            y = y - 8,
-            w = 160,
-            h = 28,
-            y = y - 6,
-            w = w,
-            h = 28 + 6,
-        }
+        
+    
 
-        local pp = self.optionBounds[i]
-        love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
-
+    
         if i == self.selected then
+            local w = menulargefont:getWidth(option) or 160
+            local fh = menulargefont:getHeight(option) or 160
+            local xPosMod = xPos - (w/2) 
+            self.optionBounds[i] = {
+                x = xPosMod,
+                y = y - (fh/2),
+                y = y,
+                w = w,
+                h = 28 + 6,
+                }
             -- Highlighted item: Larger font size (or simulated styling)
             love.graphics.setFont(menulargefont)
             love.graphics.setColor(themes.current.primary) 
-            love.graphics.print("*" .. option .. "*", xPosMod, y)
+            love.graphics.print(option, xPosMod, y - fh/2 + 16)
+            local pp = self.optionBounds[i]
+            -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
         else
+            local w = largefont:getWidth(option) or 160
+            local fh = largefont:getHeight(option) or 160
+            local xPosMod = xPos - (w/2) 
+            self.optionBounds[i] = {
+                x = xPosMod,
+                y = y - (fh/2),
+                y = y - 6,
+                w = w,
+                h = 40,
+                }
+
             -- Normal item: Smaller font size
             love.graphics.setFont(largefont)
             love.graphics.setColor(themes.current.secondary) -- White
-            love.graphics.print(option, xPosMod +20 , y)
+            love.graphics.print(option, xPosMod, y)
+            local pp = self.optionBounds[i]
+            -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
         end
     end
 
