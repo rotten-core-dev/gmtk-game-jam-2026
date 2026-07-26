@@ -21,12 +21,12 @@ local STOP_SPEED = 14
 local MAX_BALL_SPEED = 720
 local MAX_PULL_DISTANCE = 150
 local MIN_PULL_DISTANCE = 10
-local SHOT_POWER = 5.9
+local SHOT_POWER = 30
 local AI_SHOT_DELAY = 0.9
 
 local BLACK_HOLE_RADIUS = 22
 local BLACK_HOLE_CAPTURE_RADIUS = 16
-local BLACK_HOLE_GRAVITY = 72
+local BLACK_HOLE_GRAVITY = 125
 local BLACK_HOLE_SWIRL = 95
 
 local function length(x, y)

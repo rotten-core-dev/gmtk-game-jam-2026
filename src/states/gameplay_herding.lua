@@ -755,7 +755,7 @@ function gameplay_herding:isAsteroidInBeam(asteroid)
 end
 
 function gameplay_herding:updateTractorBeam(dt)
-	self.tractorBeamActive = love.mouse.isDown(1)
+	self.tractorBeamActive = not love.mouse.isDown(1)
 	if not self.tractorBeamActive then
 		self.tractoredAsteroid = nil
 		return
