@@ -8,8 +8,8 @@ themes.list = {
         primary    = { 0, 1, 0, 1 },
         secondary  = { 0, 0.5, 0, 1 },
         background = { 0.05, 0.05, 0.05, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "LIGHT GREEN",
+        secondary_name = "DARK GREEN",
     },
     {
         name        = "MONOCHROME",
@@ -17,8 +17,8 @@ themes.list = {
         primary     = { 0, 0, 0, 1 },
         secondary   = { 0.2, 0.2, 0.2, 1 },
         background  = { 0.6, 0.6, 0.6, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "BLACK",
+        secondary_name = "GREY",
     },
     {
         name        = "NEON NIGHT",
@@ -26,8 +26,8 @@ themes.list = {
         primary     = { 0.8, 0, 0.8, 1 },
         secondary   = { 0, 1, 1, 1 },
         background  = { 0.05, 0.05, 0.05, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "PURPLE",
+        secondary_name = "BLUE",
     },
     {
         name        = "PASTELS",
@@ -44,8 +44,8 @@ themes.list = {
         primary     = { 0, 0, 1, 1 },
         secondary   = { 0, 1, 1, 1 },
         background  = { 0.8, 0.8, 1, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "DARK BLUE",
+        secondary_name = "LIGHT BLUE",
     },
     {
         name        = "SPORTS BALL",
@@ -53,8 +53,8 @@ themes.list = {
         primary     = { 1, 1, 1, 1 },
         secondary   = { 0.2, 0.2, 1, 0.8 },
         background  = { 0.1, 0.1, 0.1, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "WHITE",
+        secondary_name = "BLUE",
     },
     {
         name        = "THWUMP",
@@ -62,8 +62,8 @@ themes.list = {
         primary     = { 1, 1, 1, 1 },
         secondary   = { 1, 0, 0, 1 },
         background  = { 0.05, 0.05, 0.05, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "WHITE",
+        secondary_name = "RED",
     },
     {
         name        = "TRON",
@@ -80,8 +80,8 @@ themes.list = {
         primary     = { 1, 1, 0, 1},
         secondary   = { 1, 0, 0, 1 },
         background  = { 0.05, 0.05, 0.05, 1 },
-        primary_name = "",
-        secondary_name = "",
+        primary_name = "YELLOW",
+        secondary_name = "RED",
     },
 
 }

@@ -130,7 +130,7 @@ function menu:draw()
     love.graphics.clear(themes.current.background)
     shakes.drawShakeScreen(shakes.current.power, CurrentTime)
     
-    local startY = WINDOW_HEIGHT/2 - 50
+    local startY = WINDOW_HEIGHT/2 - 80
     local spacing = 50
     self.optionBounds = {}  
     love.graphics.setFont(menutitlefont)
