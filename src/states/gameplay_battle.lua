@@ -14,6 +14,7 @@ local PLAYER_FIRE_COOLDOWN = 0.75
 local AI_FIRE_COOLDOWN = 0.75
 local AI_STRAFE_SPEED = 1.4
 local AI_BULLET_AVOID_RADIUS = 170
+local PRE_ROUND_COUNTDOWN_SECONDS = 3
 
 local function length(x, y)
 	return math.sqrt(x * x + y * y)
@@ -385,6 +386,10 @@ function gameplay_battle:resetRun()
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.continueWasDown = false
+	self.waitingForInitialStart = true
+	self.initialStartWasDown = love.keyboard.isDown("space")
+	self.preRoundCountdownActive = false
+	self.preRoundCountdownTimer = 0
 	self.freezeRoundOrbitCount = nil
 	self.scoreCountSoundPlaying = false
 	sounds.get_points:setLooping(true)
@@ -915,6 +920,27 @@ function gameplay_battle:update(dt)
 	self:updateDisplayedScore(dt)
 	self:updateShipHitEffects(dt)
 
+	if self.waitingForInitialStart then
+		local startDown = love.keyboard.isDown("space")
+		if startDown and not self.initialStartWasDown then
+			self.waitingForInitialStart = false
+			self.preRoundCountdownActive = true
+			self.preRoundCountdownTimer = PRE_ROUND_COUNTDOWN_SECONDS
+			self.orbitStartTime = nil
+		end
+		self.initialStartWasDown = startDown
+		return
+	end
+
+	if self.preRoundCountdownActive then
+		self.preRoundCountdownTimer = math.max(0, (self.preRoundCountdownTimer or 0) - dt)
+		if self.preRoundCountdownTimer <= 0 then
+			self.preRoundCountdownActive = false
+			self.orbitStartTime = love.timer.getTime()
+		end
+		return
+	end
+
 	if self.isGameOver then
 		local restartDown = love.keyboard.isDown("r")
 		if restartDown and not self.restartWasDown then
@@ -1011,16 +1037,16 @@ function gameplay_battle:drawAsteroids()
 end
 
 function gameplay_battle:drawHud()
+	if self.waitingForInitialStart or self.preRoundCountdownActive then
+		return
+	end
+
 	local worldW = love.graphics.getWidth()
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.printf("ROUND: " .. tostring(math.min(self.round, 3)) .. "/3", 0, 10, worldW, "center")
-	love.graphics.printf("YOU " .. tostring(self.playerRoundsWon) .. "  -  " .. tostring(self.enemyRoundsWon) .. " AI", 0, 36, worldW, "center")
-	love.graphics.printf("YOUR ORBITS: " .. tostring(self:getOrbitAsteroidCount(PLAYER_OWNER)), 24, 10, worldW * 0.5 - 24, "left")
-	love.graphics.printf("ENEMY ORBITS: " .. tostring(self:getOrbitAsteroidCount(ENEMY_OWNER)), worldW * 0.5, 10, worldW * 0.5 - 24, "right")
-
+	
 	if self.waitingForNextRound then
 		local worldH = love.graphics.getHeight()
 		if gameoverfont then
@@ -1044,6 +1070,38 @@ function gameplay_battle:drawHud()
 	end
 end
 
+function gameplay_battle:drawPreRoundIntro()
+	if not self.waitingForInitialStart then
+		return
+	end
+
+	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
+	if gameoverfont then
+		love.graphics.setFont(gameoverfont)
+	end
+	love.graphics.setColor(themes.current.secondary)
+	love.graphics.printf("POP THE ENEMY'S BALLOONS", 0, worldH * 0.33, worldW, "center")
+	love.graphics.printf("BEST OF THREE", 0, worldH * 0.43, worldW, "center")
+	if scorefont then
+		love.graphics.setFont(scorefont)
+	end
+	love.graphics.printf("PRESS SPACE TO START", 0, worldH * 0.56, worldW, "center")
+end
+
+function gameplay_battle:drawPreRoundCountdown()
+	if not self.preRoundCountdownActive then
+		return
+	end
+
+	local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
+	local value = math.max(1, math.ceil(self.preRoundCountdownTimer or 0))
+	if gameoverfont then
+		love.graphics.setFont(gameoverfont)
+	end
+	love.graphics.setColor(themes.current.secondary)
+	love.graphics.printf(tostring(value), 0, worldH * 0.45, worldW, "center")
+end
+
 function gameplay_battle:drawArena()
 	local centerX, centerY, arenaRadius = self:getArena()
 	local _, orbitAngle = self:getOrbitState()
@@ -1060,6 +1118,16 @@ end
 function gameplay_battle:draw()
 	love.graphics.clear(themes.current.background)
 	self:drawArena()
+	if self.waitingForInitialStart then
+		self:drawPreRoundIntro()
+		love.graphics.setColor(1, 1, 1, 1)
+		return
+	end
+	if self.preRoundCountdownActive then
+		self:drawPreRoundCountdown()
+		love.graphics.setColor(1, 1, 1, 1)
+		return
+	end
 	self:drawAsteroids()
 	self:drawParticals()
 	self:drawBullets()
