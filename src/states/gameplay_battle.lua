@@ -1060,13 +1060,15 @@ function gameplay_battle:drawHud()
 	elseif self.isGameOver then
 		local worldH = love.graphics.getHeight()
 		if gameoverfont then
-			love.graphics.setFont(gameoverfont)
+			love.graphics.setFont(gameoverfontbig)
 		end
-		love.graphics.printf(self.roundMessage or "GAME OVER", 0, worldH * 0.4, worldW, "center")
+		love.graphics.printf(self.roundMessage or "GAME OVER", 0, worldH * 0.36 + 20, worldW, "center")
+		love.graphics.setColor(themes.current.primary)
+		love.graphics.printf(self.roundMessage or "GAME OVER", 0, worldH * 0.36, worldW, "center")
 		if scorefont then
 			love.graphics.setFont(scorefont)
 		end
-		love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.55, worldW, "center")
+		love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.55 + 40, worldW, "center")
 	end
 end
 

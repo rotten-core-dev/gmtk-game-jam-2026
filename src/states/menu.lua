@@ -192,8 +192,8 @@ function menu:draw()
         end
     end
 
-    local mouseX, mouseY = love.mouse.getPosition()
-    love.graphics.draw(imagePoint,mouseX,mouseY)
+    -- local mouseX, mouseY = love.mouse.getPosition()
+    -- love.graphics.draw(imagePoint,mouseX,mouseY)
 
     love.graphics.setColor(1, 1, 1, 1)
 end
