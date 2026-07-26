@@ -51,6 +51,7 @@ function soundManager:load()
     sounds.crash2 = love.audio.newSource("lib/audio/sfx/crash2.ogg", "static")
     sounds.crash3 = love.audio.newSource("lib/audio/sfx/crash3.ogg", "static")
     sounds.jets = love.audio.newSource("lib/audio/sfx/jets2.ogg", "static")
+    sounds.ball = love.audio.newSource("lib/audio/music/billiard.ogg", "static")
     
     --menu--
     sounds.menuError = love.audio.newSource("lib/audio/sfx/menu_error.mp3", "static")
@@ -88,6 +89,7 @@ function soundManager:load()
         sounds.crash2:setVolume(masterVolume * effectVolume)
         sounds.crash3:setVolume(masterVolume * effectVolume)
         sounds.jets:setVolume(masterVolume * effectVolume * jetVolume)
+        sounds.ball:setVolume(masterVolume * effectVolume)
 
         --music--
         sounds.boop:setVolume(masterVolume * musicVolume)

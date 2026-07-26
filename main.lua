@@ -47,7 +47,8 @@ function love.load()
 
     love.graphics.setFont(font)
 
-
+    imagePoint = love.graphics.newImage("lib/img/link.png")
+    love.mouse.setVisible( false )
     
 
     

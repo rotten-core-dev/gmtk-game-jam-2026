@@ -131,6 +131,9 @@ end
 function menu:draw()
     love.graphics.clear(themes.current.background)
     shakes.drawShakeScreen(shakes.current.power, CurrentTime)
+
+
+
     
     local startY = WINDOW_HEIGHT/2 - 80
     local spacing = 50
@@ -188,6 +191,9 @@ function menu:draw()
             -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
         end
     end
+
+    local mouseX, mouseY = love.mouse.getPosition()
+    love.graphics.draw(imagePoint,mouseX,mouseY)
 
     love.graphics.setColor(1, 1, 1, 1)
 end
