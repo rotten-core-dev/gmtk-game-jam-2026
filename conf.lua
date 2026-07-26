@@ -7,7 +7,7 @@ function love.conf(t)
     
     -- Window options
     t.window.resizable = false   -- Allow resizing
-    t.window.fullscreen = true -- Start in windowed mode
+    t.window.fullscreen = false -- Start in windowed mode
     t.window.borderless = true -- Show window borders
     t.window.highdpi = false    -- Enable high DPI mode
     t.window.vsync = 1          -- Vertical sync (1 = on, 0 = off)
