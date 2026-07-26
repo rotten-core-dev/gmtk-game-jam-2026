@@ -1264,18 +1264,21 @@ function gameplay_countdown:drawHud()
 	if self.waitingForNextWaveStart or self.isGameOver then
 		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, 36, love.graphics.getWidth(), "center")
 	end
+	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, WINDOW_HEIGHT - 80, love.graphics.getWidth(), "center")
 	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then
 		local worldW, worldH = love.graphics.getWidth(), love.graphics.getHeight()
 		local typedText = string.sub(self.waveClearMessage or "", 1, self.waveClearChars or 0)
 		love.graphics.setFont(gameoverfont)
 		love.graphics.printf(typedText, 0, worldH * 0.38, worldW, "center")
-
+		love.graphics.setColor(themes.current.primary)
+		love.graphics.printf(typedText, 0, worldH * 0.38 - 10, worldW, "center")
+		love.graphics.setColor(themes.current.secondary)
 		if (self.waveClearChars or 0) >= #(self.waveClearMessage or "") then
 			if gameoverfont then
 				love.graphics.setFont(gameoverfont)
 			end
-			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.50, worldW, "center")
+			love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.50 -  70, worldW, "center")
 
 			if self.waveClearCanContinue then
 				local nextWaveModifier = math.max(1, (self.wave or 1) + 1)
@@ -1345,16 +1348,24 @@ function gameplay_countdown:drawGameOver()
 		love.graphics.setFont(gameoverfont)
 	end
 	if self.roundComplete then
-		love.graphics.printf("ROUND COMPLETE", 0, worldH * 0.36, worldW, "center")
+		love.graphics.setFont(gameoverfontbig)
+		love.graphics.setColor(themes.current.secondary)
+		love.graphics.printf("GAME OVER", 0, worldH * 0.36 + 20, worldW, "center")
+		love.graphics.setColor(themes.current.primary)
+		love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
 	else
+		love.graphics.setFont(gameoverfontbig)
+		love.graphics.setColor(themes.current.secondary)
+		love.graphics.printf("GAME OVER", 0, worldH * 0.36 + 20, worldW, "center")
+		love.graphics.setColor(themes.current.primary)
 		love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
 	end
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
-	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52, worldW, "center")
+	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46 +  150, worldW, "center")
+	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52 + 150, worldW, "center")
 end
 
 function gameplay_countdown:draw()
