@@ -475,6 +475,7 @@ function gameplay_countdown:beginWaveClearSequence(completionType)
 end
 
 function gameplay_countdown:updateWaveClearSequence(dt)
+	self:updateParticals(dt)
 	if self.waveClearChars < #self.waveClearMessage then
 		self.waveClearTypeTimer = self.waveClearTypeTimer + dt
 		local typeInterval = 0.045
@@ -1040,6 +1041,7 @@ function gameplay_countdown:handleShipAsteroidCollision()
 end
 
 function gameplay_countdown:getPopScoreForAsteroid(asteroid)
+	self:spawnParticles(asteroid.x,asteroid.y)
 	if asteroid.size == "large" then
 		return 20
 	elseif asteroid.size == "medium" then
@@ -1071,6 +1073,7 @@ end
 
 function gameplay_countdown:update(dt)
 	local escapeDown = love.keyboard.isDown("escape")
+	self:updateParticals(dt)
 	if escapeDown and not self.escapeWasDown then
 		sounds.get_points:stop()
 		self.scoreCountSoundPlaying = false
@@ -1138,12 +1141,10 @@ function gameplay_countdown:update(dt)
 	self:handleBulletAsteroidCollisions()
 	self:handleShipBulletCollision()
 	self:handleShipAsteroidCollision()
-	self:updateParticals(dt)
 
 	if not self.isGameOver then
 		local completedOrbits = self:getCompletedOrbitsThisWave()
 		local yellowAsteroids = self:getAsteroidCountByPolarity("secondary")
-
 		if yellowAsteroids == 0 and completedOrbits < MAX_WAVE_ORBITS then
 			self:beginWaveClearSequence("cleared")
 			return
