@@ -1,0 +1,72 @@
+-- menu fix
+score sounds
+jet sounds
+bounce sound
+instuction
+*dont hold click for warp
+mute music button
+
+
+draw bullets
+shoot
+draw arena
+get arena
+
+
+need to do
+- countdown- 
+show info only on the 1st
+remove text on countdonw and show playerr/roids
+remove wave/orbit text
+highscore at top
+current score btm
+fix countdown pos
+stop orbit shrink / colour change
+scoring balls partical effect + score
+round complete make look cool
+
+- CATS - 
+fix particals 
+score pos
+number pos
+shoot ball on click
+press space
+most point as you can in 3 rounds
+orbit thicker
+end of round missed point 
+sink balls before the time runs out
+lower balls socer 
+disp ball val
+perfert (dbl score)
+balls left count
+end screen juiced
+
+- survivle - 
+brighten score (flash 0.9 alpha)
+7 nation song
+
+- dog fight - 
+particals
+info screen
+floating balls hollow 
+
+juice the end screen
+
+-billiods-
+fix hud
+info screen
+change crash sound and clunk sound all of them
+particals on colision
+stronger grav
+outside colour match player
+wormholes more obvious & bring in
+
+
+
+
+
+highscores
+
+
+want to do
+
