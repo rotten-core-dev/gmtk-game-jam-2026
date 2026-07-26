@@ -294,6 +294,7 @@ function gameplay_herding:resetRun()
 	self.restartWasDown = false
 	self.escapeWasDown = false
 	self.continueWasDown = false
+	self.forceGameOverWasDown = false
 	self.fireCooldown = 0
 	self.shipWallAccelLockTimer = 0
 	self.shipInvincibleTimer = 0
@@ -1197,6 +1198,20 @@ function gameplay_herding:update(dt)
 		return
 	end
 	self.escapeWasDown = escapeDown
+
+	local forceGameOverDown = love.keyboard.isDown("g")
+	if forceGameOverDown and not self.forceGameOverWasDown and not self.isGameOver then
+		self.isGameOver = true
+		self.roundComplete = false
+		self.waitingForNextWaveStart = false
+		self.waveCountdownActive = false
+		self.tractorBeamActive = false
+		self.tractoredAsteroid = nil
+		sounds.get_points:stop()
+		self.scoreCountSoundPlaying = false
+	end
+	self.forceGameOverWasDown = forceGameOverDown
+
 	self.shipInvincibleTimer = math.max(0, (self.shipInvincibleTimer or 0) - dt)
 	self:updateDisplayedScore(dt)
 	self:updateShipHitEffects(dt)
@@ -1390,7 +1405,7 @@ function gameplay_herding:drawScoreWatermark()
 		love.graphics.setFont(scorefont)
 	end
 
-	local yOffset = scorefont:getHeight(lable)*2
+	local yOffset = scorefont:getHeight(label)*2
 
 	love.graphics.push()
 	love.graphics.translate(centerX, centerY - yOffset)
@@ -1407,13 +1422,14 @@ function gameplay_herding:drawHud()
 
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
-		love.graphics.setFont(catscorefont)
+		love.graphics.setFont(scorefont)
 	end
 	if self.waitingForNextWaveStart or self.isGameOver then
 		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, WINDOW_HEIGHT - 100, love.graphics.getWidth(), "center")
 	else
 		love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
 		love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
+		love.graphics.printf("PRESS G FOR GAME OVER", 0, WINDOW_HEIGHT - 60, love.graphics.getWidth(), "center")
 	end
 	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then

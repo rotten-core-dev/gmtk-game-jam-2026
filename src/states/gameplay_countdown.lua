@@ -116,7 +116,7 @@ end
 function gameplay_countdown:getArena()
 	local shrinkAmount = 0.85
 	local worldW, worldH = love.graphics.getWidth(),love.graphics.getHeight()
-	local completedOrbits = self:getOrbitState()
+	local completedOrbits = self:getArenaCompletedOrbits()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	local arenaSizeAdjustment = 10
 	return worldW * 0.5, worldH * 0.5, (worldH * 0.45 - arenaSizeAdjustment) * shrinkScale
@@ -131,12 +131,20 @@ function gameplay_countdown:getOrbitState()
 	return completedOrbits, orbitAngle
 end
 
+function gameplay_countdown:getArenaCompletedOrbits()
+	if self.freezeOrbitState then
+		return self.freezeOrbitState.completedOrbits
+	end
+	local completedOrbits = self:getOrbitState()
+	return completedOrbits
+end
+
 function gameplay_countdown:getArenaPlayerColor()
 	return self:getColorForPolarity(self:getPlayerPolarity())
 end
 
 function gameplay_countdown:getArenaPolarity()
-	local completedOrbits = self:getOrbitState()
+	local completedOrbits = self:getArenaCompletedOrbits()
 	if completedOrbits % 2 == 0 then
 		return "secondary"
 	end
@@ -312,6 +320,7 @@ function gameplay_countdown:resetRun()
 	self.startCountdownWasDown = false
 	self.waveCountdownActive = false
 	self.waveCountdownTimer = 0
+	self.freezeOrbitState = nil
 	self.roundComplete = false
 	self.scoreCountSoundPlaying = false
 	sounds.get_points:setLooping(true)
@@ -327,6 +336,7 @@ function gameplay_countdown:beginWaveStartPrompt()
 	self.waitingForWaveStartInput = true
 	self.waveCountdownActive = false
 	self.waveCountdownTimer = PRE_WAVE_COUNTDOWN_SECONDS
+	self.freezeOrbitState = nil
 	self.orbitStartTime = nil
 	self.bullets = {}
 	self.ship.vx = 0
@@ -338,6 +348,7 @@ function gameplay_countdown:startWaveCountdown()
 	self.waitingForWaveStartInput = false
 	self.waveCountdownActive = true
 	self.waveCountdownTimer = PRE_WAVE_COUNTDOWN_SECONDS
+	self.freezeOrbitState = nil
 	self.orbitStartTime = nil
 	self.bullets = {}
 	self.ship.vx = 0
@@ -436,6 +447,10 @@ function gameplay_countdown:beginWaveClearSequence(completionType)
 	self.waveClearCanContinue = false
 	self.wavePreResolutionScore = self.score
 	self.waveAdjustmentApplied = false
+	local completedOrbits = self:getOrbitState()
+	self.freezeOrbitState = {
+		completedOrbits = completedOrbits,
+	}
 	self.waveClearPhase = "start_hold"
 	self.wavePhaseTimer = 2.5
 	self.displayedScore = self.waveStartScore or 0
@@ -1045,10 +1060,13 @@ function gameplay_countdown:startNextWave()
 	self.wavePopInterval = 0.5
 	self.wavePopTimer = 0
 	self.waveAdjustmentApplied = false
-	self.orbitStartTime = nil
+	self.waitingForWaveStartInput = false
+	self.waveCountdownActive = false
+	self.waveCountdownTimer = 0
+	self.freezeOrbitState = nil
 	self:spawnWave(math.min(5 + self.wave, 12))
 	self.waveStartScore = self.score
-	self:beginWaveStartPrompt()
+	self.orbitStartTime = love.timer.getTime()
 end
 
 function gameplay_countdown:update(dt)
@@ -1244,9 +1262,6 @@ function gameplay_countdown:drawHud()
 	end
 	if self.waitingForNextWaveStart or self.isGameOver then
 		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, 36, love.graphics.getWidth(), "center")
-	else
-		love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
-		love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
 	end
 	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then
@@ -1289,7 +1304,8 @@ function gameplay_countdown:drawWaveCountdown()
 	if self.waitingForWaveStartInput then
 		love.graphics.printf("PRESS SPACE TO START", 0, worldH * 0.43, worldW, "center")
 	else
-		love.graphics.printf(tostring(value), 0, worldH * 0.43, worldW, "center")
+		local yoffset = gameoverfont:getHeight(tostring(value))/2
+		love.graphics.printf(tostring(value), 0, worldH * 0.5 - yoffset , worldW, "center")
 	end
 end
 
