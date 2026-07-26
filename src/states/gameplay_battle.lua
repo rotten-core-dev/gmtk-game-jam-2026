@@ -835,7 +835,6 @@ function gameplay_battle:handleBulletCollisions()
 			end
 		end
 
-		::continue::
 	end
 end
 
