@@ -2,14 +2,24 @@
 
 local sounds = {}
 --music
-sounds.beat = love.audio.newSource("lib/sounds/beat_v3.ogg", "stream")
-sounds.beat:setLooping(true)
+sounds.boop = love.audio.newSource("lib/audio/music/boop.ogg", "stream")
+sounds.boop:setLooping(true)
+
+sounds.dritx = love.audio.newSource("lib/audio/music/dritx.ogg", "stream")
+sounds.dritx:setLooping(true)
+
+sounds.jb = love.audio.newSource("lib/audio/music/jb.ogg", "stream")
+sounds.jb:setLooping(true)
+
+sounds.jbmenu = love.audio.newSource("lib/audio/music/jbmenu.ogg", "stream")
+sounds.jbmenu:setLooping(true)
+
 
 
 --sound effects
 sounds.crash = love.audio.newSource("lib/sounds/crash.ogg", "static")
 sounds.get_points = love.audio.newSource("lib/audio/sfx/point.mp3", "static")
- sounds.get_points:setVolume(0.5)
+sounds.get_points:setVolume(0.5)
 sounds.hit_foe = love.audio.newSource("lib/sounds/hitfoe.ogg", "static")
 sounds.extralife = love.audio.newSource("lib/sounds/extalife.ogg", "static")
     --need replacing--

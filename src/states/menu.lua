@@ -21,6 +21,7 @@ local themeByOption = {
     ["Exit"] = "MONOCHROME",
 }
 
+
 function menu:setThemeForOption(option)
     local themeName = themeByOption[option]
     if themeName then
@@ -29,6 +30,7 @@ function menu:setThemeForOption(option)
 end
 
 function menu:enter()
+    sounds.jbmenu:play()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices

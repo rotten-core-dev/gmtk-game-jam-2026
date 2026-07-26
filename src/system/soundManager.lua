@@ -22,6 +22,12 @@ function soundManager:load()
 
     sounds.dritx = love.audio.newSource("lib/audio/music/dritx.ogg", "stream")
     sounds.dritx:setLooping(true)
+
+    sounds.jb = love.audio.newSource("lib/audio/music/jb.ogg", "stream")
+    sounds.jb:setLooping(true)
+
+    sounds.jbmenu = love.audio.newSource("lib/audio/music/jbmenu.ogg", "stream")
+    sounds.jbmenu:setLooping(true)
    
 
     --sound effects
