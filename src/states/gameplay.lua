@@ -116,7 +116,7 @@ function gameplay:getArena()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	local arenaLineWidth = 4
-	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaLineWidth) * shrinkScale
+	return worldW * 0.5, worldH * 0.5, (worldH * 0.45 - arenaLineWidth) * shrinkScale
 end
 
 function gameplay:getOrbitState()
@@ -295,7 +295,7 @@ function gameplay:resetRun()
 	self.waveClearPromptDelay = 0
 	self.waveClearCanContinue = false
 	self.scoreCountSoundPlaying = false
-	sounds.get_points:setLooping(true)
+	-- sounds.get_points:setLooping(true)
 	sounds.get_points:stop()
 	self.orbitStartTime = love.timer.getTime()
 
@@ -493,7 +493,7 @@ function gameplay:shoot()
 		vx = ship.vx + math.cos(ship.angle) * bulletSpeed,
 		vy = ship.vy + math.sin(ship.angle) * bulletSpeed,
 		ttl = 2.0,
-		radius = 2,
+		radius = 10,
 		polarity = self:getPlayerPolarity(),
 	})
 	playShoot()
@@ -1051,7 +1051,9 @@ end
 function gameplay:drawBullets()
 	for _, bullet in ipairs(self.bullets) do
 		love.graphics.setColor(self:getColorForPolarity(bullet.polarity))
-		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
+		love.graphics.setLineWidth(6)
+		-- love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
+		love.graphics.line(bullet.x,bullet.y,bullet.x + (bullet.vx*0.1), bullet.y + (bullet.vy*0.1))
 	end
 end
 
@@ -1128,10 +1130,10 @@ function gameplay:drawArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
-	local orbiterRadius = 8
+	local orbiterRadius = 25
 
 	love.graphics.setColor(self:getArenaColor())
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(20)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end

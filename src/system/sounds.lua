@@ -8,7 +8,8 @@ sounds.beat:setLooping(true)
 
 --sound effects
 sounds.crash = love.audio.newSource("lib/sounds/crash.ogg", "static")
-sounds.get_points = love.audio.newSource("lib/sounds/get_points.ogg", "static")
+sounds.get_points = love.audio.newSource("lib/audio/sfx/point.mp3", "static")
+ sounds.get_points:setVolume(0.5)
 sounds.hit_foe = love.audio.newSource("lib/sounds/hitfoe.ogg", "static")
 sounds.extralife = love.audio.newSource("lib/sounds/extalife.ogg", "static")
     --need replacing--

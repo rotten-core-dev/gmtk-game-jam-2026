@@ -59,6 +59,7 @@ function soundManager:load()
         effectVolume = 1
         musicVolume = 1
         jetVolume = 0.07
+        pointPitch = 1
 
         --master--
         
@@ -76,7 +77,7 @@ function soundManager:load()
         sounds.laser:setVolume(masterVolume * effectVolume)
         sounds.bip:setVolume(masterVolume * effectVolume)
         sounds.boom:setVolume(masterVolume * effectVolume)
-        sounds.shoot:setVolume(masterVolume * effectVolume)
+        sounds.shoot:setVolume(masterVolume * effectVolume *0.5)
         sounds.crash:setVolume(masterVolume * effectVolume)
         sounds.crash2:setVolume(masterVolume * effectVolume)
         sounds.crash3:setVolume(masterVolume * effectVolume)
@@ -117,6 +118,19 @@ function playJetsSound()
         jetsCounter = CurrentTime
     end
 end
+
+function playPointsSound()
+    local s = sounds.point:clone()
+    pointPitch = pointPitch + love.math.random(0.01, 0.05)
+    s:setPitch(pointPitch)
+    s:play()
+end
+
+function resetPointPitch()
+    pointPitch = 1
+end
+
+
 
 function playSound(soundName, pitchRng)
     -- Use a string as the default, not the sound object itself

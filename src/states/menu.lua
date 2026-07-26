@@ -32,7 +32,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Countdown","Herding Cats", "Survival","Dog Fight", "Billiards" ,"Options", "Exit"}
+    self.options = {"Countdown","Herding Cats", "Survival","Dog Fight", "Billiards", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -130,7 +130,7 @@ function menu:draw()
     love.graphics.clear(themes.current.background)
     shakes.drawShakeScreen(shakes.current.power, CurrentTime)
     
-    local startY = WINDOW_HEIGHT/2 - 100
+    local startY = WINDOW_HEIGHT/2 - 50
     local spacing = 50
     self.optionBounds = {}  
     love.graphics.setFont(menutitlefont)
