@@ -796,7 +796,7 @@ function gameplay_battle:handleBulletCollisions()
 	for bi = #self.bullets, 1, -1 do
 		local bullet = self.bullets[bi]
 		if not bullet then
-			goto continue
+			return
 		end
 		local bulletRemoved = false
 

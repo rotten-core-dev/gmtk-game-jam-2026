@@ -1089,10 +1089,9 @@ function gameplay_herding:handleBulletAsteroidCollisions()
 		end
 
 		if bulletHit then
-			goto continue
+			return
 		end
 
-		::continue::
 	end
 end
 

@@ -812,10 +812,9 @@ function gameplay:handleBulletAsteroidCollisions()
 		end
 
 		if bulletHit then
-			goto continue
+			return
 		end
 
-		::continue::
 	end
 end
 
