@@ -21,7 +21,7 @@ local STOP_SPEED = 14
 local MAX_BALL_SPEED = 720
 local MAX_PULL_DISTANCE = 150
 local MIN_PULL_DISTANCE = 10
-local SHOT_POWER = 30
+local SHOT_POWER = 20
 local AI_SHOT_DELAY = 0.9
 
 local BLACK_HOLE_RADIUS = 22
@@ -158,6 +158,10 @@ function gameplay_billiards:getOwnerForGroup(group)
 end
 
 function gameplay_billiards:claimGroups(firstOwner, firstGroup)
+	if self.playerGroup and self.enemyGroup then
+		return false
+	end
+
 	if self.playerGroup or self.enemyGroup or not firstGroup then
 		return false
 	end
@@ -361,11 +365,12 @@ end
 
 function gameplay_billiards:resetMatch()
 	self.balls = {}
-	self.playerGroup = nil
-	self.enemyGroup = nil
+	self.playerGroup = GROUP_A
+	self.enemyGroup = GROUP_B
 	self.currentTurn = PLAYER_OWNER
 	self.turnsRemaining = 1
 	self.waitingToStart = true
+	self.breakShotPending = true
 	self.shotActive = false
 	self.aiming = false
 	self.dragX = nil
@@ -374,7 +379,7 @@ function gameplay_billiards:resetMatch()
 	self.lastMouseDown = false
 	self.winner = nil
 	self.message = "DRAG BACK THE SHIP TO SHOOT"
-	self.subMessage = "SINK THE BLACK LAST"
+	self.subMessage = "FIRST TO CLEAR THEIR COLOR WINS"
 	self.messageColor = nil
 	self.subMessageColor = nil
 	self.escapeWasDown = false
@@ -435,8 +440,7 @@ function gameplay_billiards:applyShotVelocity(owner, aimDX, aimDY, pullDistance)
 	cueBall.vx = (aimDX / dist) * power
 	cueBall.vy = (aimDY / dist) * power
 	cueBall.owner = owner
-	sounds.crash:stop()
-	sounds.crash:play()
+	playSound("ball",0.9)
 	self.message = self:getOwnerLabel(owner) .. " SHOT"
 	self.subMessage = ""
 	self.messageColor = nil
@@ -446,19 +450,36 @@ end
 function gameplay_billiards:getLegalTargetBalls(owner)
 	local targets = {}
 	local group = self:getGroupForOwner(owner)
-	local canTargetBlack = group ~= nil and self:getRemainingColorCount(owner) == 0
 	for _, ball in ipairs(self.balls) do
 		if not ball.sunk then
-			if ball.type == "color" then
-				if group == nil or ball.group == group then
-					table.insert(targets, ball)
-				end
-			elseif ball.type == "black" and canTargetBlack then
+			if ball.type == "color" and ball.group == group then
 				table.insert(targets, ball)
 			end
 		end
 	end
 	return targets
+end
+
+function gameplay_billiards:removeBlackBallFromPlay()
+	for _, ball in ipairs(self.balls) do
+		if not ball.sunk and ball.type == "black" then
+			ball.sunk = true
+			ball.vx = 0
+			ball.vy = 0
+			return true
+		end
+	end
+	return false
+end
+
+function gameplay_billiards:getWinnerByClearingColors()
+	if self:getRemainingColorCount(PLAYER_OWNER) == 0 then
+		return PLAYER_OWNER
+	end
+	if self:getRemainingColorCount(ENEMY_OWNER) == 0 then
+		return ENEMY_OWNER
+	end
+	return nil
 end
 
 function gameplay_billiards:takeAIShot()
@@ -628,10 +649,6 @@ function gameplay_billiards:sinkBall(ball)
 		elseif ball.type == "black" then
 			self.turnEvents.sankBlackBall = true
 		elseif ball.type == "color" then
-			local justAssigned = self:claimGroups(shooter, ball.group)
-			if justAssigned then
-				self.turnEvents.assignedGroup = ball.group
-			end
 			local ballOwner = self:getOwnerForGroup(ball.group)
 			if ballOwner == shooter then
 				self.turnEvents.sankOwnBall = true
@@ -641,8 +658,10 @@ function gameplay_billiards:sinkBall(ball)
 		end
 	end
 
-	sounds.hit_foe:stop()
-	sounds.hit_foe:play()
+	playSound("ball",0.9)
+	playPointsSound()
+	resetPointPitch()
+
 end
 
 function gameplay_billiards:handleBlackHoleCapture()
@@ -675,79 +694,33 @@ function gameplay_billiards:finishShot()
 
 	local shooter = self.turnEvents.shooter
 	local opponentOwner = self:getOtherOwner(shooter)
-	local remainingCurrentTurns = math.max(0, (self.turnsRemaining or 1) - 1)
-	local shooterRemainingColors = self:getRemainingColorCount(shooter)
 	self.messageColor = nil
 	self.subMessageColor = nil
 
-	if self.turnEvents.sankBlackBall then
-		if shooterRemainingColors == 0 and not self.turnEvents.sankCueBall then
-			self.winner = shooter
-			self.message = self:getOwnerLabel(shooter) .. " WINS"
-			self.subMessage = "BLACK BALL CLEARED LAST"
-		else
-			self.winner = opponentOwner
-			self.message = self:getOwnerLabel(opponentOwner) .. " WINS"
-			self.subMessage = "EARLY BLACK BALL"
-		end
-		self.shotActive = false
-		self.turnEvents = nil
-		return
+	if self.breakShotPending then
+		self.breakShotPending = false
+		self:removeBlackBallFromPlay()
 	end
 
-	local sunkAnyBall = self.turnEvents.sankOwnBall
-		or self.turnEvents.sankOpponentBall
-		or self.turnEvents.sankCueBall
-		or self.turnEvents.sankBlackBall
-	local missedAllBallsWithCue = self.turnEvents.firstContactOwner == nil and not sunkAnyBall
-	local continueOnOwnColor = self.turnEvents.sankOwnBall
-		and not self.turnEvents.sankOpponentBall
-		and not self.turnEvents.sankCueBall
-		and not self.turnEvents.sankBlackBall
-
-	local penalizeNextPlayer = self.turnEvents.sankOpponentBall
-		or self.turnEvents.firstContactOwner == opponentOwner
-		or missedAllBallsWithCue
 	if self.pendingCueRespawnOwner then
 		self:respawnCueBallForOwner(self.pendingCueRespawnOwner)
 		self.pendingCueRespawnOwner = nil
 	end
 
-	if penalizeNextPlayer then
-		self.currentTurn = opponentOwner
-		self.turnsRemaining = 2
-		self.message = self:getOwnerLabel(opponentOwner) .. " GETS TWO TURNS"
-		if self.turnEvents.sankOpponentBall then
-			self.subMessage = "SANK OPPONENT BALL"
-		elseif missedAllBallsWithCue then
-			self.subMessage = "WHITE MISSED ALL BALLS"
-		else
-			self.subMessage = "WHITE HIT OPPONENT FIRST"
-		end
-	elseif continueOnOwnColor then
-		self.currentTurn = shooter
-		self.turnsRemaining = math.max(1, remainingCurrentTurns)
-		self.message = self:getOwnerLabel(shooter) .. " CONTINUES"
-		self.subMessage = "SANK OWN COLOR"
-	elseif remainingCurrentTurns > 0 then
-		self.currentTurn = shooter
-		self.turnsRemaining = remainingCurrentTurns
-		self.message = self:getOwnerLabel(shooter) .. " BONUS TURN"
-		self.subMessage = tostring(remainingCurrentTurns) .. " TURN LEFT"
-	else
-		self.currentTurn = opponentOwner
-		self.turnsRemaining = 1
-		self.message = self:getOwnerLabel(opponentOwner) .. " TO SHOOT"
-		self.subMessage = ""
+	local winner = self:getWinnerByClearingColors()
+	if winner then
+		self.winner = winner
+		self.message = self:getOwnerLabel(winner) .. " WINS"
+		self.subMessage = "CLEARED ALL " .. self:getGroupName(self:getGroupForOwner(winner)) .. " BALLS"
+		self.shotActive = false
+		self.turnEvents = nil
+		return
 	end
 
-	if self.turnEvents.assignedGroup then
-		local assignedColor = copyColor(self:getColorForGroup(self.turnEvents.assignedGroup))
-		self.message = "COLORS ASSIGNED"
-		self.subMessage = "PLAYER " .. self:getGroupName(self.playerGroup) .. "  |  AI " .. self:getGroupName(self.enemyGroup)
-		self.messageColor = assignedColor
-		self.subMessageColor = assignedColor
-	end
+	self.currentTurn = opponentOwner
+	self.turnsRemaining = 1
+	self.message = self:getOwnerLabel(opponentOwner) .. " TO SHOOT"
+	self.subMessage = ""
 
 	self.aiAimTimer = AI_SHOT_DELAY
 	self.shotActive = false
@@ -819,7 +792,7 @@ function gameplay_billiards:update(dt)
 		if love.keyboard.isDown("space") then
 			self.waitingToStart = false
 			self.message = "PLAYER TO SHOOT"
-			self.subMessage = ""
+			self.subMessage = "PLAYER " .. self:getGroupName(self.playerGroup) .. "  |  AI " .. self:getGroupName(self.enemyGroup)
 			self.messageColor = nil
 			self.subMessageColor = nil
 		end
@@ -851,8 +824,8 @@ function gameplay_billiards:drawBlackHoles()
 		local outerRadius = BLACK_HOLE_RADIUS * 2
 		love.graphics.setColor(0, 0, 0, 0.92)
 		love.graphics.circle("fill", hole.x, hole.y, BLACK_HOLE_RADIUS)
-		love.graphics.setColor(themes.current.secondary[1], themes.current.secondary[2], themes.current.secondary[3], 0.5)
-		love.graphics.setLineWidth(2)
+		love.graphics.setColor(themes.current.secondary[1], themes.current.secondary[2], themes.current.secondary[3], 0.65)
+		love.graphics.setLineWidth(4)
 		love.graphics.circle("line", hole.x, hole.y, BLACK_HOLE_RADIUS + 4)
 		love.graphics.arc("line", hole.x, hole.y, outerRadius, pulse, pulse + math.pi * 1.1, 24)
 		love.graphics.arc("line", hole.x, hole.y, outerRadius + 8, pulse + 0.75, pulse + math.pi * 1.55, 24)
@@ -861,7 +834,8 @@ end
 
 function gameplay_billiards:drawArena()
 	local centerX, centerY, arenaRadius = self:getArena()
-	love.graphics.setColor(themes.current.secondary)
+	local shooterColor = self:getColorForOwner(self.currentTurn or PLAYER_OWNER)
+	love.graphics.setColor(shooterColor)
 	love.graphics.setLineWidth(4)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	self:drawBlackHoles()
@@ -934,6 +908,9 @@ function gameplay_billiards:drawAimingShip()
 	local clampedDist = clamp(aimDist, 16, MAX_PULL_DISTANCE)
 	local nx = aimDX / aimDist
 	local ny = aimDY / aimDist
+	local guideDist = clampedDist * 0.5
+	local guideEndX = cueBall.x + nx * guideDist
+	local guideEndY = cueBall.y + ny * guideDist
 	local shipX = cueBall.x - nx * clampedDist
 	local shipY = cueBall.y - ny * clampedDist
 	local angle = angleTo(cueBall.x - shipX, cueBall.y - shipY)
@@ -942,6 +919,7 @@ function gameplay_billiards:drawAimingShip()
 	love.graphics.setColor(color[1], color[2], color[3], 0.5)
 	love.graphics.setLineWidth(2)
 	love.graphics.line(cueBall.x, cueBall.y, shipX, shipY)
+	love.graphics.line(cueBall.x, cueBall.y, guideEndX, guideEndY)
 
 	local size = 14
 	local noseX = shipX + math.cos(angle) * (size + 4)
@@ -961,38 +939,38 @@ function gameplay_billiards:drawHud()
 		love.graphics.setFont(scorefont)
 	end
 
-	love.graphics.setColor(themes.current.secondary)
-	love.graphics.printf("PLAYER " .. tostring(self:getRemainingColorCount(PLAYER_OWNER)) .. "  -  " .. tostring(self:getRemainingColorCount(ENEMY_OWNER)) .. " AI", 0, 10, worldW, "center")
-	love.graphics.printf(self:getOwnerLabel(self.currentTurn) .. " TURNS: " .. tostring(self.turnsRemaining or 1), 0, 36, worldW, "center")
-	local messageColor = self.messageColor or themes.current.secondary
-	love.graphics.setColor(messageColor)
-	love.graphics.printf(self.message or "", 0, 62, worldW, "center")
-	if self.subMessage and self.subMessage ~= "" then
-		local subMessageColor = self.subMessageColor or themes.current.secondary
-		love.graphics.setColor(subMessageColor)
-		love.graphics.printf(self.subMessage, 0, 86, worldW, "center")
-	end
-	love.graphics.setColor(themes.current.secondary)
-	local playerColorName = self.playerGroup and self:getGroupName(self.playerGroup) or "UNASSIGNED"
-	local aiColorName = self.enemyGroup and self:getGroupName(self.enemyGroup) or "UNASSIGNED"
-	local playerColorTint = self.playerGroup and self:getColorForGroup(self.playerGroup) or themes.current.secondary
-	local aiColorTint = self.enemyGroup and self:getColorForGroup(self.enemyGroup) or themes.current.secondary
-	love.graphics.setColor(playerColorTint)
-	love.graphics.printf("PLAYER COLOR: " .. playerColorName, 16, 110, worldW * 0.5 - 20, "right")
-	love.graphics.setColor(aiColorTint)
-	love.graphics.printf("AI COLOR: " .. aiColorName, worldW * 0.5 + 4, 110, worldW * 0.5 - 20, "left")
-	love.graphics.setColor(themes.current.secondary)
-	love.graphics.printf("ESC MENU  |  R RESET", 0, love.graphics.getHeight() - 30, worldW, "center")
+	-- love.graphics.setColor(themes.current.secondary)
+	-- love.graphics.printf("PLAYER " .. tostring(self:getRemainingColorCount(PLAYER_OWNER)) .. "  -  " .. tostring(self:getRemainingColorCount(ENEMY_OWNER)) .. " AI", 0, 10, worldW, "center")
+	-- love.graphics.printf(self:getOwnerLabel(self.currentTurn) .. " TO SHOOT", 0, 36, worldW, "center")
+	-- local messageColor = self.messageColor or themes.current.secondary
+	-- love.graphics.setColor(messageColor)
+	-- love.graphics.printf(self.message or "", 0, 62, worldW, "center")
+	-- if self.subMessage and self.subMessage ~= "" then
+	-- 	local subMessageColor = self.subMessageColor or themes.current.secondary
+	-- 	love.graphics.setColor(subMessageColor)
+	-- 	love.graphics.printf(self.subMessage, 0, 86, worldW, "center")
+	-- end
+	-- love.graphics.setColor(themes.current.secondary)
+	-- local playerColorName = self:getGroupName(self.playerGroup)
+	-- local aiColorName = self:getGroupName(self.enemyGroup)
+	-- local playerColorTint = self:getColorForGroup(self.playerGroup)
+	-- local aiColorTint = self:getColorForGroup(self.enemyGroup)
+	-- love.graphics.setColor(playerColorTint)
+	-- love.graphics.printf("PLAYER COLOR: " .. playerColorName, 16, 110, worldW * 0.5 - 20, "right")
+	-- love.graphics.setColor(aiColorTint)
+	-- love.graphics.printf("AI COLOR: " .. aiColorName, worldW * 0.5 + 4, 110, worldW * 0.5 - 20, "left")
+	-- love.graphics.setColor(themes.current.secondary)
+	--love.graphics.printf("ESC MENU  |  R RESET", 0, love.graphics.getHeight() - 30, worldW, "center")
 
 	if self.waitingToStart then
 		local worldH = love.graphics.getHeight()
 		if gameoverfont then
 			love.graphics.setFont(gameoverfont)
 		end
+		love.graphics.setColor(themes.current.primary)
+		love.graphics.printf("SINK THE " .. tostring(themes.current.primary_name) .. " INTO THE WORMHOLES", 0, worldH * 0.33, worldW, "center")
+		love.graphics.setColor(themes.current.secondary)
 		love.graphics.printf("PRESS SPACE TO BEGIN", 0, worldH * 0.43, worldW, "center")
-		if scorefont then
-			love.graphics.setFont(scorefont)
-		end
 		love.graphics.printf("DRAG BACK THE SHIP TO SHOOT", 0, worldH * 0.54, worldW, "center")
 		return
 	end
