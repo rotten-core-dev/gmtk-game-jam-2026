@@ -16,7 +16,7 @@ local themeByOption = {
     ["Herding Cats"] = "PASTELS",
     ["Survival"] = "THWUMP",
     ["Dog Fight"] = "SPORTS BALL",
-    ["Billiards"] = "YRB",
+    ["Space Pool"] = "YRB",
     ["Options"] = "HACKER",
     ["Exit"] = "MONOCHROME",
 }
@@ -34,7 +34,7 @@ function menu:enter()
     sounds.crash:stop()
     sounds.crash:play()
     -- Define your exact list of choices
-    self.options = {"Countdown","Herding Cats", "Survival","Dog Fight", "Billiards", "Exit"}
+    self.options = {"Countdown","Herding Cats", "Survival","Dog Fight", "Space Pool", "Exit"}
     self.selected = 1 -- Start highlighted on item 1
     self.timer = 0
     self.showJoinText = true
@@ -212,7 +212,7 @@ function menu:executeChoice()
         state.switch(SurvivalState)
     elseif choice == "Dog Fight" then
         state.switch(BattleState)
-    elseif choice == "Billiards" then
+    elseif choice == "Space Pool" then
         state.switch(BilliardsState)
     elseif choice == "Options" then
         -- state.switch(OptionsMenuState)
