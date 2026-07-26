@@ -1199,18 +1199,18 @@ function gameplay_herding:update(dt)
 	end
 	self.escapeWasDown = escapeDown
 
-	local forceGameOverDown = love.keyboard.isDown("g")
-	if forceGameOverDown and not self.forceGameOverWasDown and not self.isGameOver then
-		self.isGameOver = true
-		self.roundComplete = false
-		self.waitingForNextWaveStart = false
-		self.waveCountdownActive = false
-		self.tractorBeamActive = false
-		self.tractoredAsteroid = nil
-		sounds.get_points:stop()
-		self.scoreCountSoundPlaying = false
-	end
-	self.forceGameOverWasDown = forceGameOverDown
+	-- local forceGameOverDown = love.keyboard.isDown("g")
+	-- if forceGameOverDown and not self.forceGameOverWasDown and not self.isGameOver then
+	-- 	self.isGameOver = true
+	-- 	self.roundComplete = false
+	-- 	self.waitingForNextWaveStart = false
+	-- 	self.waveCountdownActive = false
+	-- 	self.tractorBeamActive = false
+	-- 	self.tractoredAsteroid = nil
+	-- 	sounds.get_points:stop()
+	-- 	self.scoreCountSoundPlaying = false
+	-- end
+	-- self.forceGameOverWasDown = forceGameOverDown
 
 	self.shipInvincibleTimer = math.max(0, (self.shipInvincibleTimer or 0) - dt)
 	self:updateDisplayedScore(dt)
@@ -1427,9 +1427,9 @@ function gameplay_herding:drawHud()
 	if self.waitingForNextWaveStart or self.isGameOver then
 		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, WINDOW_HEIGHT - 100, love.graphics.getWidth(), "center")
 	else
-		love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
-		love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
-		love.graphics.printf("PRESS G FOR GAME OVER", 0, WINDOW_HEIGHT - 60, love.graphics.getWidth(), "center")
+		-- love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
+		-- love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
+		-- love.graphics.printf("PRESS G FOR GAME OVER", 0, WINDOW_HEIGHT - 60, love.graphics.getWidth(), "center")
 	end
 	--love.graphics.print("MOVE: WASD/ARROWS  AIM: MOUSE  FIRE: LEFT CLICK", 16, 460)
 	if self.waitingForNextWaveStart then
@@ -1511,14 +1511,18 @@ function gameplay_herding:drawGameOver()
 		love.graphics.setFont(gameoverfont)
 		love.graphics.printf("ROUND COMPLETE", 0, worldH * 0.36, worldW, "center")
 	else
+		love.graphics.setFont(gameoverfontbig)
+		love.graphics.setColor(themes.current.secondary)
+		love.graphics.printf("GAME OVER", 0, worldH * 0.36 + 20, worldW, "center")
+		love.graphics.setColor(themes.current.primary)
 		love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
 	end
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
 		love.graphics.setFont(scorefont)
 	end
-	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46, worldW, "center")
-	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52, worldW, "center")
+	love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, worldH * 0.46 +  150, worldW, "center")
+	love.graphics.printf("PRESS R TO RESTART", 0, worldH * 0.52 + 150, worldW, "center")
 end
 
 function gameplay_herding:draw()
