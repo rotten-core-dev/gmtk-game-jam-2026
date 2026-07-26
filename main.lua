@@ -5,7 +5,7 @@ require "src.system.soundManager"
 -- local shakes = require "src.system.shakes"
 
 -- Load your sequential states
-local IntroState = require "src.states.intro"
+--local IntroState = require "src.states.intro"
 local MenuState = require "src.states.menu"
 
 -- Actual window size (can be any size)
