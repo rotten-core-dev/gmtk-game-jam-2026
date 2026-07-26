@@ -41,6 +41,7 @@ function love.load()
     gameoverfont = love.graphics.newFont("lib/fonts/bitrimus/Bitrimus.ttf", 80)
     biggergameoverfont = love.graphics.newFont("lib/fonts/bitrimus/Bitrimus.ttf", 85)
     scorefont = love.graphics.newFont("lib/fonts/GameBoy.ttf", 20)
+    catscorefont = love.graphics.newFont("lib/fonts/bitrimus/Bitrimus.ttf", 40)
     settingsfont = love.graphics.newFont("lib/fonts/bitrimus/Bitrimus.ttf", 20)
 
     love.graphics.setFont(font)

@@ -1326,11 +1326,13 @@ function gameplay_herding:drawBlackHole()
 
 	love.graphics.setColor(0, 0, 0, 0.92)
 	love.graphics.circle("fill", centerX, centerY, blackHoleRadius)
-	love.graphics.setColor(themes.current.secondary[1], themes.current.secondary[2], themes.current.secondary[3], 0.24)
-	love.graphics.setLineWidth(2)
+	love.graphics.setColor(themes.current.primary[1], themes.current.primary[2], themes.current.primary[3], 0.25)
+	love.graphics.setLineWidth(6)
 	love.graphics.circle("line", centerX, centerY, blackHoleRadius + 4 + pulse * 2)
 	love.graphics.arc("line", centerX, centerY, outerRadius, pulse, pulse + math.pi * 1.25, 24)
 	love.graphics.arc("line", centerX, centerY, outerRadius + 8, pulse + 0.9, pulse + math.pi * 1.55, 24)
+	love.graphics.setColor(themes.current.primary[1], themes.current.primary[2], themes.current.primary[3], 0.6)
+	love.graphics.circle("line", centerX, centerY, outerRadius + 8)
 end
 
 function gameplay_herding:drawTractorBeam()
@@ -1379,7 +1381,7 @@ function gameplay_herding:drawScoreWatermark()
 		label = tostring(self:getOrbitsRemainingThisWave())
 		color = themes.current.primary
 		scale = 1.35
-		alpha = 0.18
+		alpha = 1 --0.18
 	end
 
 	if gameoverfont then
@@ -1388,8 +1390,10 @@ function gameplay_herding:drawScoreWatermark()
 		love.graphics.setFont(scorefont)
 	end
 
+	local yOffset = scorefont:getHeight(lable)*2
+
 	love.graphics.push()
-	love.graphics.translate(centerX, centerY - 28)
+	love.graphics.translate(centerX, centerY - yOffset)
 	love.graphics.scale(scale, scale)
 	love.graphics.setColor(color[1], color[2], color[3], alpha)
 	love.graphics.printf(label, -centerX / scale, 0, (centerX * 2) / scale, "center")
@@ -1403,10 +1407,10 @@ function gameplay_herding:drawHud()
 
 	love.graphics.setColor(themes.current.secondary)
 	if scorefont then
-		love.graphics.setFont(scorefont)
+		love.graphics.setFont(catscorefont)
 	end
 	if self.waitingForNextWaveStart or self.isGameOver then
-		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, 36, love.graphics.getWidth(), "center")
+		love.graphics.printf("SCORE: " .. tostring(self.displayedScore or 0), 0, WINDOW_HEIGHT - 100, love.graphics.getWidth(), "center")
 	else
 		love.graphics.printf("ORBITS LEFT: " .. tostring(self:getOrbitsRemainingThisWave()), 0, 10,love.graphics.getWidth(),"center")
 		love.graphics.printf("WAVE: " .. tostring(self.wave) .. "/" .. tostring(MAX_WAVES), 0, 36, love.graphics.getWidth(), "center")
@@ -1458,10 +1462,10 @@ function gameplay_herding:drawArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
-	local orbiterRadius = 8
+	local orbiterRadius = 25
 
 	love.graphics.setColor(self:getArenaColor())
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(10)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
@@ -1471,7 +1475,7 @@ function gameplay_herding:drawCountdownArena()
 	arenaRadius = arenaRadius * 0.95
 	local firstOrbitColor = self:getColorForPolarity("secondary")
 	love.graphics.setColor(firstOrbitColor)
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(10)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	-- Keep the countdown arena visually identical to orbit 1.
 	love.graphics.circle("fill", centerX, centerY - arenaRadius, 8)
@@ -1488,6 +1492,7 @@ function gameplay_herding:drawGameOver()
 		love.graphics.setFont(gameoverfont)
 	end
 	if self.roundComplete then
+		love.graphics.setFont(gameoverfont)
 		love.graphics.printf("ROUND COMPLETE", 0, worldH * 0.36, worldW, "center")
 	else
 		love.graphics.printf("GAME OVER", 0, worldH * 0.36, worldW, "center")
