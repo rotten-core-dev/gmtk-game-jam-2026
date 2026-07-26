@@ -58,7 +58,7 @@ function soundManager:load()
         menueffectVolume = 1
         effectVolume = 1
         musicVolume = 1
-        jetVolume = 0.1
+        jetVolume = 0.07
 
         --master--
         

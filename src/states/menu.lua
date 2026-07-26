@@ -15,8 +15,8 @@ local themeByOption = {
     ["Countdown"] = "TRON",
     ["Herding Cats"] = "PASTELS",
     ["Survival"] = "THWUMP",
-    ["Dog Fight"] = "SPORTS BALL",
-    ["Billiards"] = "YRB",
+    ["Dog Fight"] = "YRB",
+    ["Billiards"] = "SPORTS BALL",
     ["Options"] = "HACKER",
     ["Exit"] = "MONOCHROME",
 }
@@ -71,7 +71,10 @@ function menu:update(dt)
 
     if hoveredOption then
         self.hoveredOption = hoveredOption
-
+        if self.selected ~= hoveredOption then
+            playSound(menuSound,menuSoundPitch)
+            shakes.trigger(shakes.current.power,0.15,CurrentTime)
+        end
         self.selected = hoveredOption
     else
         self.hoveredOption = nil
@@ -107,7 +110,7 @@ function menu:update(dt)
             if self.selected < 1 then self.selected = #self.options end
             self:setThemeForOption(self.options[self.selected])
             self.previewedOption = self.selected
-             playSound(menuSound,menuSoundPitch)
+            playSound(menuSound,menuSoundPitch)
         end
 
         local selectIsDown = love.keyboard.isDown("return") or love.keyboard.isDown("space")
@@ -127,22 +130,24 @@ function menu:draw()
     love.graphics.clear(themes.current.background)
     shakes.drawShakeScreen(shakes.current.power, CurrentTime)
     
-    local startY = 200
+    local startY = WINDOW_HEIGHT/2 - 100
     local spacing = 50
     self.optionBounds = {}
 
     love.graphics.setFont(titlefont)
     love.graphics.setColor(themes.current.secondary)
-    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2-60), WINDOW_HEIGHT/2-240+8)
+    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2), WINDOW_HEIGHT/2-240+8)
     love.graphics.setColor(themes.current.primary)
-    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2-60), WINDOW_HEIGHT/2-240)
+    love.graphics.print("COUNTEROIDS", (love.graphics.getWidth( )/2-menutitlefont:getWidth("COUNTEROIDS")/2), WINDOW_HEIGHT/2-240)
     
     
     for i, option in ipairs(self.options) do
         local y = startY + (i * spacing)
         local w = menulargefont:getWidth("> " .. option) or 160
+        local xPos = WINDOW_WIDTH/2
+        local xPosMod = xPos - (w/2) 
         self.optionBounds[i] = {
-            x = 300,
+            x = xPosMod,
             y = y - 8,
             w = 160,
             h = 28,
@@ -152,18 +157,18 @@ function menu:draw()
         }
 
         local pp = self.optionBounds[i]
-        -- love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
+        love.graphics.rectangle("line",pp.x,pp.y,pp.w,pp.h)
 
         if i == self.selected then
             -- Highlighted item: Larger font size (or simulated styling)
             love.graphics.setFont(menulargefont)
             love.graphics.setColor(themes.current.primary) 
-            love.graphics.print("*" .. option .. "*", 300, y)
+            love.graphics.print("*" .. option .. "*", xPosMod, y)
         else
             -- Normal item: Smaller font size
             love.graphics.setFont(largefont)
             love.graphics.setColor(themes.current.secondary) -- White
-            love.graphics.print(option, 320, y)
+            love.graphics.print(option, xPosMod +20 , y)
         end
     end
 

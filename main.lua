@@ -22,8 +22,8 @@ function love.load()
     debug = {
         invn = false,
     }
-    love.window.setFullscreen( true )
-    love.window.setTitle("COUNTEROIDS")
+    -- love.window.setFullscreen( false )
+    -- love.window.setTitle("COUNTEROIDS")
 
     WINDOW_HEIGHT = love.graphics.getHeight()
     WINDOW_WIDTH = love.graphics.getWidth()
