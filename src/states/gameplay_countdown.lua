@@ -119,7 +119,7 @@ function gameplay_countdown:getArena()
 	local completedOrbits = self:getOrbitState()
 	local shrinkScale = math.max(0.35, shrinkAmount ^ completedOrbits)
 	local arenaSizeAdjustment = 10
-	return worldW * 0.5, worldH * 0.5, (worldH * 0.5 - arenaSizeAdjustment) * shrinkScale
+	return worldW * 0.5, worldH * 0.5, (worldH * 0.45 - arenaSizeAdjustment) * shrinkScale
 end
 
 function gameplay_countdown:getOrbitState()
@@ -240,11 +240,15 @@ function gameplay_countdown:spawnWave(count)
 	local shipY = (self.ship and self.ship.y) or centerY
 	local minShipDistance = (self.ship and self.ship.radius or 12) + 30 + 40
 	local asteroidPolarities = {}
-	local primaryCount = math.floor(count / 2)
+	local totalCount = math.max(2, count)
+	if totalCount % 2 ~= 0 then
+		totalCount = totalCount + 1
+	end
+	local primaryCount = totalCount / 2
 	for _ = 1, primaryCount do
 		table.insert(asteroidPolarities, "primary")
 	end
-	for _ = primaryCount + 1, count do
+	for _ = primaryCount + 1, totalCount do
 		table.insert(asteroidPolarities, "secondary")
 	end
 	for i = #asteroidPolarities, 2, -1 do
@@ -252,7 +256,7 @@ function gameplay_countdown:spawnWave(count)
 		asteroidPolarities[i], asteroidPolarities[swapIndex] = asteroidPolarities[swapIndex], asteroidPolarities[i]
 	end
 
-	for _ = 1, count do
+	for _ = 1, totalCount do
 		local polarity = asteroidPolarities[_]
 		local x, y = self:getSafeAsteroidSpawnPosition(shipX, shipY, minShipDistance)
 		self:spawnAsteroid(x, y, "large", polarity)
@@ -304,6 +308,8 @@ function gameplay_countdown:resetRun()
 	self.wavePopInterval = 0.5
 	self.wavePopTimer = 0
 	self.waveAdjustmentApplied = false
+	self.waitingForWaveStartInput = false
+	self.startCountdownWasDown = false
 	self.waveCountdownActive = false
 	self.waveCountdownTimer = 0
 	self.roundComplete = false
@@ -314,10 +320,22 @@ function gameplay_countdown:resetRun()
 
 	self:spawnWave(5)
 	self.waveStartScore = self.score
-	self:startWaveCountdown()
+	self:beginWaveStartPrompt()
+end
+
+function gameplay_countdown:beginWaveStartPrompt()
+	self.waitingForWaveStartInput = true
+	self.waveCountdownActive = false
+	self.waveCountdownTimer = PRE_WAVE_COUNTDOWN_SECONDS
+	self.orbitStartTime = nil
+	self.bullets = {}
+	self.ship.vx = 0
+	self.ship.vy = 0
+	self.startCountdownWasDown = love.keyboard.isDown("space")
 end
 
 function gameplay_countdown:startWaveCountdown()
+	self.waitingForWaveStartInput = false
 	self.waveCountdownActive = true
 	self.waveCountdownTimer = PRE_WAVE_COUNTDOWN_SECONDS
 	self.orbitStartTime = nil
@@ -618,7 +636,7 @@ function gameplay_countdown:shoot()
 		vx = ship.vx + math.cos(ship.angle) * bulletSpeed,
 		vy = ship.vy + math.sin(ship.angle) * bulletSpeed,
 		ttl = 2.0,
-		radius = 2,
+		radius = 10,
 		polarity = self:getPlayerPolarity(),
 	})
 	playShoot()
@@ -688,6 +706,7 @@ function gameplay_countdown:drawParticals()
 
 	for i = 1,#particles do
 		local cp = particles[i]
+		love.graphics.setLineWidth(20)
 		love.graphics.line(cp.x,cp.y,cp.x +cp.velX,cp.y +cp.velY)
 	end
 end
@@ -1029,7 +1048,7 @@ function gameplay_countdown:startNextWave()
 	self.orbitStartTime = nil
 	self:spawnWave(math.min(5 + self.wave, 12))
 	self.waveStartScore = self.score
-	self:startWaveCountdown()
+	self:beginWaveStartPrompt()
 end
 
 function gameplay_countdown:update(dt)
@@ -1065,6 +1084,15 @@ function gameplay_countdown:update(dt)
 		return
 	end
 	self.continueWasDown = false
+
+	if self.waitingForWaveStartInput then
+		local startDown = love.keyboard.isDown("space")
+		if startDown and not self.startCountdownWasDown then
+			self:startWaveCountdown()
+		end
+		self.startCountdownWasDown = startDown
+		return
+	end
 
 	if self.waveCountdownActive then
 		self.waveCountdownTimer = math.max(0, (self.waveCountdownTimer or 0) - dt)
@@ -1158,7 +1186,9 @@ end
 function gameplay_countdown:drawBullets()
 	for _, bullet in ipairs(self.bullets) do
 		love.graphics.setColor(self:getColorForPolarity(bullet.polarity))
-		love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
+		love.graphics.setLineWidth(6)
+		-- love.graphics.circle("fill", bullet.x, bullet.y, bullet.radius)
+		love.graphics.line(bullet.x,bullet.y,bullet.x + (bullet.vx*0.1), bullet.y + (bullet.vy*0.1))
 	end
 end
 
@@ -1243,7 +1273,7 @@ function gameplay_countdown:drawHud()
 end
 
 function gameplay_countdown:drawWaveCountdown()
-	if not self.waveCountdownActive then
+	if not self.waveCountdownActive and not self.waitingForWaveStartInput then
 		return
 	end
 
@@ -1256,7 +1286,11 @@ function gameplay_countdown:drawWaveCountdown()
 	love.graphics.setColor(themes.current.secondary)
 	love.graphics.printf("CLEAR THE " .. themes.current.secondary_name .. " BALLS", 0, worldH * 0.23, worldW, "center")
 	love.graphics.printf("BEFORE THE COUNTDOWN ENDS", 0, worldH * 0.33, worldW, "center")
-	love.graphics.printf(tostring(value), 0, worldH * 0.43, worldW, "center")
+	if self.waitingForWaveStartInput then
+		love.graphics.printf("PRESS SPACE TO START", 0, worldH * 0.43, worldW, "center")
+	else
+		love.graphics.printf(tostring(value), 0, worldH * 0.43, worldW, "center")
+	end
 end
 
 function gameplay_countdown:drawArena()
@@ -1264,10 +1298,10 @@ function gameplay_countdown:drawArena()
 	local _, orbitAngle = self:getOrbitState()
 	local orbiterX = centerX + math.cos(orbitAngle) * arenaRadius
 	local orbiterY = centerY + math.sin(orbitAngle) * arenaRadius
-	local orbiterRadius = 8
+	local orbiterRadius = 25
 
 	love.graphics.setColor(self:getArenaColor())
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(20)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	love.graphics.circle("fill", orbiterX, orbiterY, orbiterRadius)
 end
@@ -1277,10 +1311,10 @@ function gameplay_countdown:drawCountdownArena()
 	local firstOrbitColor = self:getColorForPolarity("secondary")
 	arenaRadius = arenaRadius * 0.85
 	love.graphics.setColor(firstOrbitColor)
-	love.graphics.setLineWidth(4)
+	love.graphics.setLineWidth(20)
 	love.graphics.circle("line", centerX, centerY, arenaRadius)
 	-- Keep the countdown arena visually identical to orbit 1.
-	love.graphics.circle("fill", centerX, centerY - arenaRadius, 8)
+	love.graphics.circle("fill", centerX, centerY - arenaRadius, 25)
 end
 
 function gameplay_countdown:drawGameOver()
@@ -1308,7 +1342,7 @@ end
 
 function gameplay_countdown:draw()
 	love.graphics.clear(themes.current.background)
-	if self.waveCountdownActive then
+	if self.waitingForWaveStartInput or self.waveCountdownActive then
 		self:drawCountdownArena()
 		self:drawWaveCountdown()
 		love.graphics.setColor(1, 1, 1, 1)
